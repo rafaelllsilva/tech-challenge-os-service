@@ -1,0 +1,9 @@
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tech
+      POSTGRES_PASSWORD: challenge_1234
+      POSTGRES_DB: tech_challenge
+    ports:
+      - "5434:5432"

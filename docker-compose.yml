@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: tech_challenge_postgres
+    environment:
+      POSTGRES_USER: tech
+      POSTGRES_PASSWORD: challenge_1234
+      POSTGRES_DB: techchallenge
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tech -d techchallenge"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: tech_challenge_sonarqube
+    ports:
+      - "9000:9000"
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_logs:/opt/sonarqube/logs
+    profiles:
+      - tools
+
+  app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: tech_challenge_app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/techchallenge
+      SPRING_DATASOURCE_USERNAME: tech
+      SPRING_DATASOURCE_PASSWORD: challenge_1234
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_FLYWAY_ENABLED: "true"
+      JWT_SECRET: minha-chave-secreta-dev-minimo-32-chars!!
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pg_data:
+  sonarqube_data:
+  sonarqube_logs:

@@ -1,0 +1,181 @@
+name: CD - Build, Push & Deploy EKS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-eks
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  JAVA_VERSION: "21"
+  CLUSTER_NAME: tech-challenge
+  NAMESPACE: tech-challenge
+  ECR_REPOSITORY: tech-challenge-app
+
+jobs:
+  deploy:
+    name: Build, Push ECR & Deploy EKS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Código
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "corretto"
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: "gradle"
+
+      - name: Configurar Credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login no Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build e Push da Imagem Docker
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}"
+          echo "Compilando e publicando imagem: ${IMAGE_URI}:${IMAGE_TAG}"
+
+          docker build \
+            --platform linux/amd64 \
+            -t "${IMAGE_URI}:${IMAGE_TAG}" \
+            -t "${IMAGE_URI}:latest" \
+            -f app/Dockerfile .
+
+          docker push "${IMAGE_URI}:${IMAGE_TAG}"
+          docker push "${IMAGE_URI}:latest"
+
+      - name: Configurar Kubeconfig para o Cluster EKS
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ env.AWS_REGION }} \
+            --name ${{ env.CLUSTER_NAME }}
+
+      - name: Aplicar ConfigMap
+        run: kubectl apply -f k8s/configmap.yaml
+
+      - name: Criar ou Atualizar Secrets no Kubernetes
+        run: |
+          kubectl create secret generic app-secrets \
+            --namespace=${{ env.NAMESPACE }} \
+            --from-literal=SPRING_DATASOURCE_URL="${{ secrets.DB_URL }}" \
+            --from-literal=SPRING_DATASOURCE_USERNAME="${{ secrets.DB_USER }}" \
+            --from-literal=SPRING_DATASOURCE_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            --from-literal=WEBHOOK_APROVACAO_SECRET="${{ secrets.WEBHOOK_APROVACAO_SECRET }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Injetar Imagem e Aplicar Manifestos no EKS
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_FULL="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          sed -i "s|IMAGE_PLACEHOLDER|${IMAGE_FULL}|g" k8s/deployment.yaml
+
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/hpa.yaml
+          kubectl apply -f k8s/pod-disruption-budget.yaml
+
+      - name: Recriar Pods em deploy manual
+        if: github.event_name == 'workflow_dispatch'
+        run: kubectl rollout restart deployment/tech-challenge-app -n ${{ env.NAMESPACE }}
+
+      - name: Verificar Rollout do Deployment
+        run: |
+          if ! kubectl rollout status deployment/tech-challenge-app \
+            -n ${{ env.NAMESPACE }} \
+            --timeout=15m; then
+            echo "::error::O rollout não estabilizou. Consulte HPA, Pods e eventos abaixo para identificar escala ou capacidade insuficiente."
+            kubectl get hpa -n ${{ env.NAMESPACE }}
+            kubectl get deployment tech-challenge-app -n ${{ env.NAMESPACE }}
+            kubectl get pods -n ${{ env.NAMESPACE }} -l app=tech-challenge-app -o wide
+            kubectl get events -n ${{ env.NAMESPACE }} --sort-by=.lastTimestamp
+            exit 1
+          fi
+
+      - name: Validar auto-attach do New Relic
+        run: |
+          expected_init_container="nri-java--tech-challenge-app"
+          pod_names="$(kubectl get pods -n ${{ env.NAMESPACE }} -l app=tech-challenge-app -o jsonpath='{.items[*].metadata.name}')"
+
+          if [ -z "$pod_names" ]; then
+            echo "::error::Nenhum Pod da aplicação foi encontrado para validar o auto-attach do New Relic."
+            exit 1
+          fi
+
+          for pod in $pod_names; do
+            init_containers="$(kubectl get pod "$pod" -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.initContainers[*].name}')"
+            case " $init_containers " in
+              *" $expected_init_container "*) ;;
+              *)
+                echo "::error::O Pod $pod não contém o init container $expected_init_container."
+                exit 1
+                ;;
+            esac
+
+            java_tool_options="$(kubectl get pod "$pod" -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.containers[?(@.name=="tech-challenge-app")].env[?(@.name=="JAVA_TOOL_OPTIONS")].value}')"
+            case "$java_tool_options" in
+              *"-javaagent:/nri-java--tech-challenge-app/newrelic-agent.jar"*) ;;
+              *)
+                echo "::error::O Pod $pod não recebeu o JAVA_TOOL_OPTIONS do agente New Relic."
+                exit 1
+                ;;
+            esac
+
+            license_key_reference="$(kubectl get pod "$pod" -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.containers[?(@.name=="tech-challenge-app")].env[?(@.name=="NEW_RELIC_LICENSE_KEY")].valueFrom.secretKeyRef.name}{" "}{.spec.containers[?(@.name=="tech-challenge-app")].env[?(@.name=="NEW_RELIC_LICENSE_KEY")].valueFrom.secretKeyRef.key}')"
+            if [ "$license_key_reference" != "newrelic-key-secret new_relic_license_key" ]; then
+              echo "::error::O Pod $pod não recebeu a referência esperada da chave New Relic."
+              exit 1
+            fi
+          done
+
+          kubectl get secret newrelic-key-secret -n ${{ env.NAMESPACE }} -o name
+
+      - name: Gerar tráfego para validação APM
+        run: |
+          kubectl port-forward -n ${{ env.NAMESPACE }} service/tech-challenge-app-service 18080:80 > /tmp/newrelic-port-forward.log 2>&1 &
+          port_forward_pid=$!
+          trap 'kill "$port_forward_pid"' EXIT
+
+          for attempt in {1..15}; do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/v3/api-docs > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error::Não foi possível gerar tráfego para a aplicação após o rollout."
+          exit 1
+
+      - name: Exibir Endpoint do Load Balancer
+        run: |
+          echo "=========================================================="
+          echo "Aguardando endpoint do LoadBalancer..."
+          sleep 10
+          LB_HOSTNAME=$(kubectl get svc tech-challenge-app-service \
+            -n ${{ env.NAMESPACE }} \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Pendente")
+          echo "DNS do Load Balancer: http://${LB_HOSTNAME}"
+          echo "Swagger UI: http://${LB_HOSTNAME}/swagger-ui/index.html"
+          echo "=========================================================="

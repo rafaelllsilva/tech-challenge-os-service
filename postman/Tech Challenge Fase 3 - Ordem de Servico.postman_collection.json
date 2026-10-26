@@ -1,0 +1,623 @@
+{
+  "info": {
+    "_postman_id": "d7e4e5f5-7661-4b3c-8b98-57f5d65e37b1",
+    "name": "Tech Challenge Fase 3 - Ordem de Serviço",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "839168"
+  },
+  "item": [
+    {
+      "name": "API Autenticar Cliente via Lambda (CPF) — Fase 3 Serverless",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const responseData = pm.response.json();",
+              "const jwtToken = responseData.token || responseData.accessToken;",
+              "",
+              "pm.collectionVariables.set(\"jwtToken\", jwtToken);",
+              "pm.environment.set(\"jwtToken\", jwtToken);",
+              "",
+              "console.log(\"Token JWT (CLIENTE) salvo: \" + jwtToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"cpf\": \"529.982.247-25\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth"
+          ]
+        },
+        "description": "Autenticação serverless de cliente por CPF via AWS Lambda. Retorna token JWT com role CLIENTE."
+      },
+      "response": []
+    },
+    {
+      "name": "API Autenticar Usuário Interno (Login/Senha) — EKS Backend",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const responseData = pm.response.json();",
+              "const jwtToken = responseData.accessToken || responseData.token;",
+              "",
+              "pm.collectionVariables.set(\"jwtToken\", jwtToken);",
+              "pm.environment.set(\"jwtToken\", jwtToken);",
+              "",
+              "console.log(\"Token JWT (INTERNO) salvo: \" + jwtToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"login\": \"gerente\",\n    \"senha\": \"senha@123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/auth/login",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Autenticação legada de usuário interno (gerente, atendente, mecânico) via aplicação Spring Boot no EKS."
+      },
+      "response": []
+    },
+    {
+      "name": "GET All Ordem de Serviço demo",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{url}}/ordemDeServico/",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST Ordem de Serviço demo",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"solicitacao\": \"Faça a troca de óleo anual do meu carro.\",\r\n  \"idCliente\": 1,\r\n  \"idVeiculo\": 1\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/ordemDeServico/",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST Ordem de Serviço V2 demo",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"solicitacao\": \"Faça a troca de óleo anual do meu carro.\",\r\n    \"idCliente\": 1,\r\n    \"idVeiculo\": 1,\r\n    \"pecas\": [\r\n        {\r\n            \"idTipoPeca\": 3,\r\n            \"quantidade\": 1\r\n        },\r\n        {\r\n            \"idTipoPeca\": 5,\r\n            \"quantidade\": 1\r\n        }\r\n    ],\r\n    \"servicos\": [\r\n        1\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/ordemDeServico/",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "GET Ordem de Serviço demo",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{url}}/ordemDeServico/:id",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "16"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST Mover OS para Em Diagnóstico demo",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Webhook-Secret",
+            "value": "webhook-secret-key-123",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/ordemDeServico/transicao/paraDiagnostico/:id",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            "transicao",
+            "paraDiagnostico",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "16"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "PUT Add Peças demo",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"pecasParaAdd\": [\r\n        {\r\n            \"idTipoPeca\": 3,\r\n            \"quantidade\": 1\r\n        },\r\n        {\r\n            \"idTipoPeca\": 5,\r\n            \"quantidade\": 1\r\n        }\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/ordemDeServico/adicionarPecas/:id",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            "adicionarPecas",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "16"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "PUT Add Serviços demo",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"idTipoServicos\": [\r\n        1\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/ordemDeServico/adicionarServicos/:id",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            "adicionarServicos",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "16"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST Mover OS para Aguardando Aprovação V2 Webhook demo",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Webhook-Secret",
+            "value": "webhook-secret-key-123",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/ordemDeServico/transicao/paraAprovacao/:id",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            "transicao",
+            "paraAprovacao",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "16"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "DELETE Remover Peças demo",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"idTipoPecasParaRemover\": [3, 5]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/ordemDeServico/removerPecas/:id",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            "removerPecas",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "16"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "DELETE Remover Serviços demo",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"idTipoServicos\": [1]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/ordemDeServico/removerServicos/:id",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            "removerServicos",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "16"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST Mover OS para Aprovada V2 Webhook demo",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Webhook-Secret",
+            "value": "webhook-secret-key-123",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    //\"aprovado\": false\r\n    \"aprovado\": true\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/ordemDeServico/transicao/paraAprovacaoOuRejeicaoCliente/:id",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            "transicao",
+            "paraAprovacaoOuRejeicaoCliente",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "16"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST Mover OS para Em Execução V2 Webhook demo",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Webhook-Secret",
+            "value": "webhook-secret-key-123",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/ordemDeServico/transicao/paraEmExecucao/:id",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            "transicao",
+            "paraEmExecucao",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "16"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST Mover OS para Finalizada V2 Webhook demo",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Webhook-Secret",
+            "value": "webhook-secret-key-123",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/ordemDeServico/transicao/paraFinalizada/:id",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            "transicao",
+            "paraFinalizada",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "16"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST Mover OS para Entregue V2 Webhook demo",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Webhook-Secret",
+            "value": "webhook-secret-key-123",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/ordemDeServico/transicao/paraEntregue/:id",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "ordemDeServico",
+            "transicao",
+            "paraEntregue",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "16"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwtToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://<API_GATEWAY_URL>/Prod",
+      "type": "string",
+      "description": "URL base do API Gateway na AWS (ex: https://<id>.execute-api.us-east-1.amazonaws.com/Prod). Atualize este valor quando recriar a infraestrutura."
+    },
+    {
+      "key": "url",
+      "value": "{{baseUrl}}/api",
+      "type": "string",
+      "description": "Prefixo das rotas de negócio da aplicação no EKS via API Gateway proxy."
+    },
+    {
+      "key": "jwtToken",
+      "value": "",
+      "type": "string",
+      "description": "Token JWT preenchido automaticamente pela rota de autenticação."
+    }
+  ]
+}

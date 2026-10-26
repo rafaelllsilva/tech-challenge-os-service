@@ -1,0 +1,327 @@
+{
+  "info": {
+    "_postman_id": "394f10c1-6352-4bf9-9bad-61434bab4f62",
+    "name": "Tech Challenge Fase 3 - Clientes",
+    "description": "Collection para testar os endpoints de Cliente da API TechChallenge Fase 3",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "839168"
+  },
+  "item": [
+    {
+      "name": "API Autenticar Cliente via Lambda (CPF) — Fase 3 Serverless",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const responseData = pm.response.json();",
+              "const jwtToken = responseData.token || responseData.accessToken;",
+              "",
+              "pm.collectionVariables.set(\"jwtToken\", jwtToken);",
+              "pm.environment.set(\"jwtToken\", jwtToken);",
+              "",
+              "console.log(\"Token JWT (CLIENTE) salvo: \" + jwtToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"cpf\": \"529.982.247-25\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth"
+          ]
+        },
+        "description": "Autenticação serverless de cliente por CPF via AWS Lambda. Retorna token JWT com role CLIENTE."
+      },
+      "response": []
+    },
+    {
+      "name": "API Autenticar Usuário Interno (Login/Senha) — EKS Backend",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const responseData = pm.response.json();",
+              "const jwtToken = responseData.accessToken || responseData.token;",
+              "",
+              "pm.collectionVariables.set(\"jwtToken\", jwtToken);",
+              "pm.environment.set(\"jwtToken\", jwtToken);",
+              "",
+              "console.log(\"Token JWT (INTERNO) salvo: \" + jwtToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"login\": \"gerente\",\n    \"senha\": \"senha@123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/auth/login",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Autenticação legada de usuário interno (gerente, atendente, mecânico) via aplicação Spring Boot no EKS."
+      },
+      "response": []
+    },
+    {
+      "name": "Listar todos os clientes",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{url}}/cliente",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "cliente"
+          ]
+        },
+        "description": "Retorna todos os clientes cadastrados."
+      },
+      "response": []
+    },
+    {
+      "name": "Buscar cliente por documento (CPF)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{url}}/cliente?documento=52998224725",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "cliente"
+          ],
+          "query": [
+            {
+              "key": "documento",
+              "value": "52998224725",
+              "description": "CPF ou CNPJ do cliente"
+            }
+          ]
+        },
+        "description": "Filtra cliente pelo CPF ou CNPJ informado como query param."
+      },
+      "response": []
+    },
+    {
+      "name": "Buscar cliente por ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{url}}/cliente/1",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "cliente",
+            "1"
+          ]
+        },
+        "description": "Retorna um cliente específico pelo ID."
+      },
+      "response": []
+    },
+    {
+      "name": "Criar cliente (PF)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Maria Silva\",\n  \"tipoPessoa\": \"PF\",\n  \"documento\": \"52998224725\",\n  \"dataNascimento\": \"1990-05-15\",\n  \"email\": \"maria.silva@email.com\"\n}"
+        },
+        "url": {
+          "raw": "{{url}}/cliente",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "cliente"
+          ]
+        },
+        "description": "Cadastra um novo cliente Pessoa Física com CPF válido."
+      },
+      "response": []
+    },
+    {
+      "name": "Criar cliente (PJ)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Empresa XYZ Ltda\",\n  \"tipoPessoa\": \"PJ\",\n  \"documento\": \"11222333000181\",\n  \"email\": \"contato@empresaxyz.com.br\"\n}"
+        },
+        "url": {
+          "raw": "{{url}}/cliente",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "cliente"
+          ]
+        },
+        "description": "Cadastra um novo cliente Pessoa Jurídica com CNPJ válido."
+      },
+      "response": []
+    },
+    {
+      "name": "Atualizar cliente",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Maria Souza\",\n  \"email\": \"maria.souza@email.com\"\n}"
+        },
+        "url": {
+          "raw": "{{url}}/cliente/1",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "cliente",
+            "1"
+          ]
+        },
+        "description": "Atualiza nome e/ou email de um cliente existente pelo ID."
+      },
+      "response": []
+    },
+    {
+      "name": "Remover cliente",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{url}}/cliente/1",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "cliente",
+            "1"
+          ]
+        },
+        "description": "Remove um cliente pelo ID e retorna os dados do cliente removido."
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwtToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://<API_GATEWAY_URL>/Prod",
+      "type": "string",
+      "description": "URL base do API Gateway na AWS (ex: https://<id>.execute-api.us-east-1.amazonaws.com/Prod). Atualize este valor quando recriar a infraestrutura."
+    },
+    {
+      "key": "url",
+      "value": "{{baseUrl}}/api",
+      "type": "string",
+      "description": "Prefixo das rotas de negócio da aplicação no EKS via API Gateway proxy."
+    },
+    {
+      "key": "jwtToken",
+      "value": "",
+      "type": "string",
+      "description": "Token JWT preenchido automaticamente pela rota de autenticação."
+    }
+  ]
+}

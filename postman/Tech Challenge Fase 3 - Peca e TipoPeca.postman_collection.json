@@ -1,0 +1,429 @@
+{
+  "info": {
+    "_postman_id": "aea47221-dfc0-46f7-b036-6f1e34c69af9",
+    "name": "Tech Challenge Fase 3 - Peça e TipoPeça",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "839168"
+  },
+  "item": [
+    {
+      "name": "API Autenticar Cliente via Lambda (CPF) — Fase 3 Serverless",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const responseData = pm.response.json();",
+              "const jwtToken = responseData.token || responseData.accessToken;",
+              "",
+              "pm.collectionVariables.set(\"jwtToken\", jwtToken);",
+              "pm.environment.set(\"jwtToken\", jwtToken);",
+              "",
+              "console.log(\"Token JWT (CLIENTE) salvo: \" + jwtToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"cpf\": \"529.982.247-25\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth"
+          ]
+        },
+        "description": "Autenticação serverless de cliente por CPF via AWS Lambda. Retorna token JWT com role CLIENTE."
+      },
+      "response": []
+    },
+    {
+      "name": "API Autenticar Usuário Interno (Login/Senha) — EKS Backend",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const responseData = pm.response.json();",
+              "const jwtToken = responseData.accessToken || responseData.token;",
+              "",
+              "pm.collectionVariables.set(\"jwtToken\", jwtToken);",
+              "pm.environment.set(\"jwtToken\", jwtToken);",
+              "",
+              "console.log(\"Token JWT (INTERNO) salvo: \" + jwtToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"login\": \"gerente\",\n    \"senha\": \"senha@123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/auth/login",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Autenticação legada de usuário interno (gerente, atendente, mecânico) via aplicação Spring Boot no EKS."
+      },
+      "response": []
+    },
+    {
+      "name": "TipoPeca - Listar Todos",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/tipoPeca/",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "tipoPeca",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "TipoPeca - Buscar por ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/tipoPeca/11",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "tipoPeca",
+            "11"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "TipoPeca - Criar",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Nova Peça Teste\",\n  \"valorUnitario\": 150.00,\n  \"quantidadeEstoque\": 20\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/tipoPeca/",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "tipoPeca",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "TipoPeca - Atualizar",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Peça Atualizada\",\n  \"valorUnitario\": 200.00,\n  \"quantidadeEstoque\": 30\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/tipoPeca/1",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "tipoPeca",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "TipoPeca - Deletar",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/tipoPeca/11",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "tipoPeca",
+            "11"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Peca - Listar Todos",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/peca/",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "peca",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Peca - Buscar por ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/peca/11",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "peca",
+            "11"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Peca - Criar",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idOs\": 1,\n  \"idTipoPeca\": 1,\n  \"quantidade\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/peca/",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "peca",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Peca - Atualizar",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"quantidade\": 10\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/peca/17",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "peca",
+            "17"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Peca - Deletar",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/peca/17",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "peca",
+            "17"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwtToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://<API_GATEWAY_URL>/Prod",
+      "type": "string",
+      "description": "URL base do API Gateway na AWS (ex: https://<id>.execute-api.us-east-1.amazonaws.com/Prod). Atualize este valor quando recriar a infraestrutura."
+    },
+    {
+      "key": "url",
+      "value": "{{baseUrl}}/api",
+      "type": "string",
+      "description": "Prefixo das rotas de negócio da aplicação no EKS via API Gateway proxy."
+    },
+    {
+      "key": "jwtToken",
+      "value": "",
+      "type": "string",
+      "description": "Token JWT preenchido automaticamente pela rota de autenticação."
+    }
+  ]
+}

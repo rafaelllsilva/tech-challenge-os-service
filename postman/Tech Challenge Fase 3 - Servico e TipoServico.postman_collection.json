@@ -1,0 +1,561 @@
+{
+  "info": {
+    "_postman_id": "9671cd79-67f7-423c-befe-4ec7ad7c184d",
+    "name": "Tech Challenge Fase 3 - Serviço e TipoServiço",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "839168"
+  },
+  "item": [
+    {
+      "name": "API Autenticar Cliente via Lambda (CPF) — Fase 3 Serverless",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const responseData = pm.response.json();",
+              "const jwtToken = responseData.token || responseData.accessToken;",
+              "",
+              "pm.collectionVariables.set(\"jwtToken\", jwtToken);",
+              "pm.environment.set(\"jwtToken\", jwtToken);",
+              "",
+              "console.log(\"Token JWT (CLIENTE) salvo: \" + jwtToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"cpf\": \"529.982.247-25\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth"
+          ]
+        },
+        "description": "Autenticação serverless de cliente por CPF via AWS Lambda. Retorna token JWT com role CLIENTE."
+      },
+      "response": []
+    },
+    {
+      "name": "API Autenticar Usuário Interno (Login/Senha) — EKS Backend",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const responseData = pm.response.json();",
+              "const jwtToken = responseData.accessToken || responseData.token;",
+              "",
+              "pm.collectionVariables.set(\"jwtToken\", jwtToken);",
+              "pm.environment.set(\"jwtToken\", jwtToken);",
+              "",
+              "console.log(\"Token JWT (INTERNO) salvo: \" + jwtToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"login\": \"gerente\",\n    \"senha\": \"senha@123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/auth/login",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Autenticação legada de usuário interno (gerente, atendente, mecânico) via aplicação Spring Boot no EKS."
+      },
+      "response": []
+    },
+    {
+      "name": "GET All Serviços - SEM FILTRO",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "accept",
+            "value": "*/*"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/servico",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "servico"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "GET All Serviços - COM FILTRO POR ID OS",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "accept",
+            "value": "*/*"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/servico?id=11",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "servico"
+          ],
+          "query": [
+            {
+              "key": "id",
+              "value": "11"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST - Criar um serviço",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{bearer_token_0pzg}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tipoServicoId\": 3,\n  \"ordemDeServicoId\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/servico",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "servico"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "GET - Serviço por ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{bearer_token_0pzg}}"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/servico/10",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "servico",
+            "10"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "PUT - Update do serviço",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "accept",
+            "value": "*/*"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{bearer_token_0a7y}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tipoServicoId\": 4\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/servico/13",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "servico",
+            "13"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "DELETE - Serviço por id",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "accept",
+            "value": "*/*"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{bearer_token_0a7y}}"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/servico/9",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "servico",
+            "9"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "GET - Tipo Serviço por Id",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "accept",
+            "value": "*/*"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{bearer_token_0a7y}}"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/tipo-servico/10",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "tipo-servico",
+            "10"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "GET - All Tipos Serviço",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "accept",
+            "value": "*/*"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{bearer_token_0a7y}}"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/tipo-servico",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "tipo-servico"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "PUT - Update Tipo Serviço por id",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "accept",
+            "value": "*/*"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{bearer_token_0a7y}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"valor\": 360\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/tipo-servico/10",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "tipo-servico",
+            "10"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "DELETE - Tipo serviço por id",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "accept",
+            "value": "*/*"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{bearer_token_0a7y}}"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/tipo-servico/10",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "tipo-servico",
+            "10"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "POST - Criação de um novo tipo de serviço",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "accept",
+            "value": "*/*"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{bearer_token_0a7y}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Concerto Vazamento\",\n  \"valor\": 387\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/tipo-servico",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "tipo-servico"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "GET - Tempo de execução de tipos de serviço - SEM FILTRO",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{bearer_token_0a7y}}"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/tipo-servico/tempo-medio",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "tipo-servico",
+            "tempo-medio"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "GET - Tempo médio tipo serviço - FILTRADO POR ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{url}}/tipo-servico/tempo-medio?id=2",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "tipo-servico",
+            "tempo-medio"
+          ],
+          "query": [
+            {
+              "key": "id",
+              "value": "2"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwtToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://<API_GATEWAY_URL>/Prod",
+      "type": "string",
+      "description": "URL base do API Gateway na AWS (ex: https://<id>.execute-api.us-east-1.amazonaws.com/Prod). Atualize este valor quando recriar a infraestrutura."
+    },
+    {
+      "key": "url",
+      "value": "{{baseUrl}}/api",
+      "type": "string",
+      "description": "Prefixo das rotas de negócio da aplicação no EKS via API Gateway proxy."
+    },
+    {
+      "key": "jwtToken",
+      "value": "",
+      "type": "string",
+      "description": "Token JWT preenchido automaticamente pela rota de autenticação."
+    }
+  ]
+}

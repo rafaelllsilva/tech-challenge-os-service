@@ -1,0 +1,347 @@
+{
+  "info": {
+    "_postman_id": "684df3e9-be67-4171-92e7-cb39339b5c44",
+    "name": "Tech Challenge Fase 3 - Veículo",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "839168"
+  },
+  "item": [
+    {
+      "name": "API Autenticar Cliente via Lambda (CPF) — Fase 3 Serverless",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const responseData = pm.response.json();",
+              "const jwtToken = responseData.token || responseData.accessToken;",
+              "",
+              "pm.collectionVariables.set(\"jwtToken\", jwtToken);",
+              "pm.environment.set(\"jwtToken\", jwtToken);",
+              "",
+              "console.log(\"Token JWT (CLIENTE) salvo: \" + jwtToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"cpf\": \"529.982.247-25\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth"
+          ]
+        },
+        "description": "Autenticação serverless de cliente por CPF via AWS Lambda. Retorna token JWT com role CLIENTE."
+      },
+      "response": []
+    },
+    {
+      "name": "API Autenticar Usuário Interno (Login/Senha) — EKS Backend",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const responseData = pm.response.json();",
+              "const jwtToken = responseData.accessToken || responseData.token;",
+              "",
+              "pm.collectionVariables.set(\"jwtToken\", jwtToken);",
+              "pm.environment.set(\"jwtToken\", jwtToken);",
+              "",
+              "console.log(\"Token JWT (INTERNO) salvo: \" + jwtToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"login\": \"gerente\",\n    \"senha\": \"senha@123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/auth/login",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Autenticação legada de usuário interno (gerente, atendente, mecânico) via aplicação Spring Boot no EKS."
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Veiculo By Placa",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{url}}/veiculo?placa=BRA2E19",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "veiculo"
+          ],
+          "query": [
+            {
+              "key": "placa",
+              "value": "BRA2E19"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Veiculo By ID",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{url}}/veiculo/11",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "veiculo",
+            "11"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Update Veiculo By Placa",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"marca\": \"BYD\",\n    \"modelo\": \"Dolphin\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/veiculo?placa=TUV4W56",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "veiculo"
+          ],
+          "query": [
+            {
+              "key": "placa",
+              "value": "TUV4W56"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Update Veiculo By ID",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n        \"placa\": \"HJH-1234\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/veiculo/1",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "veiculo",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Create Veiculo",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"placa\": \"HHH-1234\",\n    \"marca\": \"KIWI\",\n    \"modelo\": \"ORANGE\",\n    \"ano\": 2020\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{url}}/veiculo",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "veiculo"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get Veiculo By Placa",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{url}}/veiculo?placa=ABC-1234",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "veiculo"
+          ],
+          "query": [
+            {
+              "key": "placa",
+              "value": "ABC-1234"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get Veiculo By ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{url}}/veiculo/1",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "veiculo",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get All Veiculo",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{url}}/veiculo",
+          "host": [
+            "{{url}}"
+          ],
+          "path": [
+            "veiculo"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwtToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://<API_GATEWAY_URL>/Prod",
+      "type": "string",
+      "description": "URL base do API Gateway na AWS (ex: https://<id>.execute-api.us-east-1.amazonaws.com/Prod). Atualize este valor quando recriar a infraestrutura."
+    },
+    {
+      "key": "url",
+      "value": "{{baseUrl}}/api",
+      "type": "string",
+      "description": "Prefixo das rotas de negócio da aplicação no EKS via API Gateway proxy."
+    },
+    {
+      "key": "jwtToken",
+      "value": "",
+      "type": "string",
+      "description": "Token JWT preenchido automaticamente pela rota de autenticação."
+    }
+  ]
+}
