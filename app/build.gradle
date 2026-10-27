@@ -85,7 +85,7 @@ jacocoTestCoverageVerification {
 
 sonar {
 	properties {
-		property 'sonar.projectKey', 'techchallenge'
+		property 'sonar.projectKey', 'tech-challenge-os-service'
 		property 'sonar.host.url', 'http://localhost:9000'
 		property 'sonar.coverage.jacoco.xmlReportPaths',
 				'build/reports/jacoco/test/jacocoTestReport.xml'

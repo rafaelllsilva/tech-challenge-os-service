@@ -26,7 +26,7 @@ Implementa as regras de negócio do sistema de gestão de uma oficina mecânica 
 ├── pr.yml          CI: testes unitários, cobertura JaCoCo e build check da imagem Docker
 └── deploy.yml      CD: build, push ECR e deploy no EKS via kubectl
 app/
-├── src/main/java/com/fiap/techchallenge/
+├── src/main/java/com/fiap/techchallenge/os/
 │   ├── cliente/           domínio e endpoints de cliente
 │   ├── veiculo/           domínio e endpoints de veículo
 │   ├── ordemservico/      domínio e endpoints de ordem de serviço
