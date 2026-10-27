@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS servico;
+DROP TABLE IF EXISTS peca;
+DROP TABLE IF EXISTS tipo_servico;
+DROP TABLE IF EXISTS tipo_peca;

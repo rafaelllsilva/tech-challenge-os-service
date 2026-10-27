@@ -8,17 +8,6 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(ServicoBadStatusException.class)
-    public ResponseEntity<ErrorMessage> handleServicoBadStatus(ServicoBadStatusException ex) {
-
-        ErrorMessage error = new ErrorMessage(
-                HttpStatus.CONFLICT.value(),
-                ex.getMessage()
-        );
-
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
-    }
-
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ErrorMessage> handleConflict(ConflictException ex) {
 
@@ -50,17 +39,6 @@ public class GlobalExceptionHandler {
         );
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
-    }
-
-    @ExceptionHandler(TipoServicoUnableToModify.class)
-    public ResponseEntity<ErrorMessage> handleTipoServicoUnableToModify(TipoServicoUnableToModify ex) {
-
-        ErrorMessage error = new ErrorMessage(
-                HttpStatus.CONFLICT.value(),
-                ex.getMessage()
-        );
-
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
     record ErrorMessage(int status, String message) {}

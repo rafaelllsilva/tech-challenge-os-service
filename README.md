@@ -30,7 +30,6 @@ app/
 │   ├── cliente/           domínio e endpoints de cliente
 │   ├── veiculo/           domínio e endpoints de veículo
 │   ├── ordemservico/      domínio e endpoints de ordem de serviço
-│   ├── peca/              domínio e endpoints de peça
 │   └── security/          filtro JWT, configuração Spring Security
 ├── src/main/resources/
 │   ├── application.properties    configuração e variáveis de ambiente
@@ -48,8 +47,6 @@ k8s/
 postman/
 ├── Tech Challenge Fase 3 - Clientes.postman_collection.json
 ├── Tech Challenge Fase 3 - Veiculo.postman_collection.json
-├── Tech Challenge Fase 3 - Peca e TipoPeca.postman_collection.json
-├── Tech Challenge Fase 3 - Servico e TipoServico.postman_collection.json
 ├── Tech Challenge Fase 3 - Ordem de Servico.postman_collection.json
 └── TechChallenge-Fase3.postman_environment.json
 docker-compose.yml                stack local: App + PostgreSQL 16 + SonarQube
@@ -260,9 +257,7 @@ Cria uma nova ordem de serviço vinculada ao cliente e ao veículo.
   {
     "solicitacao": "Troca de pastilhas de freio dianteiras e alinhamento",
     "idCliente": 1,
-    "idVeiculo": 1,
-    "pecas": [],
-    "servicos": []
+    "idVeiculo": 1
   }
   ```
 
@@ -282,9 +277,7 @@ Cria uma nova ordem de serviço vinculada ao cliente e ao veículo.
       "id": 1,
       "placa": "ABC1D23",
       "modelo": "Civic"
-    },
-    "itensPeca": [],
-    "itensServico": []
+    }
   }
   ```
 

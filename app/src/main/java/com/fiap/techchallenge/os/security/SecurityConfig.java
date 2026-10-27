@@ -110,10 +110,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/ordemDeServico/**").hasAnyRole("ATENDENTE", "GERENTE")
 
                         // GERENTE
-                        .requestMatchers("/api/peca/**").hasRole("GERENTE")
-                        .requestMatchers("/api/tipoPeca/**").hasRole("GERENTE")
-                        .requestMatchers("/api/servico/**").hasRole("GERENTE")
-                        .requestMatchers("/api/tipoServico/**").hasRole("GERENTE")
                         .requestMatchers("/api/usuario/**").hasRole("GERENTE")
 
                         .anyRequest().authenticated()
