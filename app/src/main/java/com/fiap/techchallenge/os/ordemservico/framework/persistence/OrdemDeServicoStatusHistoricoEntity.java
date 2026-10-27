@@ -19,7 +19,7 @@ import java.time.Instant;
 @Getter
 @Setter
 @NoArgsConstructor
-@Table(schema = "oficina", name = "ordem_de_servico_status_historico")
+@Table(name = "ordem_de_servico_status_historico")
 public class OrdemDeServicoStatusHistoricoEntity {
 
     @Id

@@ -10,7 +10,7 @@ Implementa as regras de negócio do sistema de gestão de uma oficina mecânica 
 
 - Java 21 (Amazon Corretto)
 - Spring Boot 4.0.5 (Spring MVC, Spring Data JPA, Spring Security, Spring Actuator)
-- PostgreSQL 16 / Flyway (13 migrations, schema `oficina`)
+- PostgreSQL 16 / Flyway (13 migrations, schema `os`)
 - JWT — JJWT (`io.jsonwebtoken:jjwt`), assinatura HMAC-SHA256
 - SpringDoc OpenAPI 3 (Swagger UI)
 - Docker — multi-stage build (`linux/amd64`)
@@ -85,7 +85,7 @@ docker-compose.yml                stack local: App + PostgreSQL 16 + SonarQube
                                           ┌──────────────────▼────────────────┐
                                           │  Amazon RDS PostgreSQL 16         │
                                           │  database: techchallenge          │
-                                          │  schema:   oficina                │
+                                          │  schema:   os                     │
                                           └───────────────────────────────────┘
 ```
 

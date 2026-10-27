@@ -4,8 +4,8 @@ metadata:
   name: app-config
   namespace: tech-challenge
 data:
-  DB_NAME: "oficina"
+  DB_NAME: "os_service"
   SPRING_JPA_SHOW_SQL: "false"
   SPRING_FLYWAY_ENABLED: "true"
-  SPRING_FLYWAY_SCHEMAS: "oficina"
+  SPRING_FLYWAY_SCHEMAS: "os"
   SWAGGER_BASE_PATH: "/Prod"

@@ -18,7 +18,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Tech Challenge – Oficina API")
-                        .description("API REST para gerenciamento de oficina mecânica")
+                        .description("API REST para gerenciamento de ordens de serviço")
                         .version("1.0.0"))
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
                 .components(new Components()
