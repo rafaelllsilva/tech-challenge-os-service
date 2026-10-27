@@ -2,8 +2,6 @@ package com.fiap.techchallenge.os.ordemservico.framework.persistence;
 
 import com.fiap.techchallenge.os.cliente.framework.persistence.ClienteEntity;
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
-import com.fiap.techchallenge.os.peca.framework.persistence.entity.PecaEntity;
-import com.fiap.techchallenge.os.servico.framework.persistence.entity.ServicoEntity;
 import com.fiap.techchallenge.os.veiculo.framework.persistence.VeiculoEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -12,7 +10,6 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Entity
 @Data
@@ -46,10 +43,4 @@ public class OrdemDeServicoEntity {
     @ManyToOne
     @JoinColumn(name = "id_veiculo")
     private VeiculoEntity veiculo;
-
-    @OneToMany(mappedBy = "ordemDeServico", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<PecaEntity> pecas;
-
-    @OneToMany(mappedBy = "ordemDeServico", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ServicoEntity> servicos;
 }

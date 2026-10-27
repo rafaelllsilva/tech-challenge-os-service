@@ -3,6 +3,7 @@ package com.fiap.techchallenge.os.servico.usecase.interactor;
 import com.fiap.techchallenge.os.exception.NotFoundException;
 import com.fiap.techchallenge.os.exception.ServicoBadStatusException;
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
+import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.usecase.OrdemDeServicoGateway;
 import com.fiap.techchallenge.os.servico.domain.Servico;
 import com.fiap.techchallenge.os.servico.domain.TipoServico;
@@ -119,7 +120,8 @@ public class ServicoInteractor implements ServicoUseCase {
         OrdemDeServico os = ordemDeServicoGateway.findOrdemDeServicoById(id)
                 .orElseThrow(() -> new NotFoundException("Ordem de serviço não encontrada para o id: " + id));
 
-        if (!os.podeEditarOuAdicionarServico()) {
+        // Inlined da OS (removido na Tarefa 2); este módulo sai na Tarefa 3
+        if (os.getStatus() != StatusOrdemDeServico.EM_DIAGNOSTICO && os.getStatus() != StatusOrdemDeServico.RECEBIDA) {
             throw new ServicoBadStatusException("Só é permitido adicionar serviços em OS que estejam com status " +
                     "EM_DIAGNOSTICO ou RECEBIDA");
         }

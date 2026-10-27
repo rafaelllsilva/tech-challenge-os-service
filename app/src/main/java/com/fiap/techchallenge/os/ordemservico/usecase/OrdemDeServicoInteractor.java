@@ -7,15 +7,6 @@ import com.fiap.techchallenge.os.exception.BadRequestException;
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
-import com.fiap.techchallenge.os.ordemservico.inputdata.AdicionarPecaItemInputData;
-import com.fiap.techchallenge.os.peca.domain.Peca;
-import com.fiap.techchallenge.os.peca.domain.TipoPeca;
-import com.fiap.techchallenge.os.peca.usecase.TipoPecaGateway;
-import com.fiap.techchallenge.os.servico.domain.Servico;
-import com.fiap.techchallenge.os.servico.domain.ServicoStatus;
-import com.fiap.techchallenge.os.servico.domain.TipoServico;
-import com.fiap.techchallenge.os.servico.usecase.ServicoUseCase;
-import com.fiap.techchallenge.os.servico.usecase.gateway.TipoServicoGateway;
 import com.fiap.techchallenge.os.veiculo.domain.Veiculo;
 import com.fiap.techchallenge.os.veiculo.usecase.VeiculoGateway;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +21,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -41,9 +31,6 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
     private final OrdemDeServicoGateway osGateway;
     private final ClienteGateway clienteGateway;
     private final VeiculoGateway veiculoGateway;
-    private final TipoServicoGateway tipoServicoGateway;
-    private final TipoPecaGateway tipoPecaGateway;
-    private final ServicoUseCase servicoUseCase;
     private final HistoricoStatusOrdemDeServicoGateway historicoStatusOrdemDeServicoGateway;
     private final OrdemDeServicoEventLogger loggerEventos;
     private final Clock clock;
@@ -51,17 +38,12 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
     @Autowired
     public OrdemDeServicoInteractor(
             OrdemDeServicoGateway osGateway,
-            TipoPecaGateway tipoPecaGateway,
             ClienteGateway clienteGateway, VeiculoGateway veiculoGateway,
-            TipoServicoGateway tipoServicoGateway, ServicoUseCase servicoUseCase,
             HistoricoStatusOrdemDeServicoGateway historicoStatusOrdemDeServicoGateway,
             OrdemDeServicoEventLogger loggerEventos, Clock clock) {
         this.osGateway = osGateway;
         this.clienteGateway = clienteGateway;
         this.veiculoGateway = veiculoGateway;
-        this.tipoPecaGateway = tipoPecaGateway;
-        this.tipoServicoGateway = tipoServicoGateway;
-        this.servicoUseCase = servicoUseCase;
         this.historicoStatusOrdemDeServicoGateway = historicoStatusOrdemDeServicoGateway;
         this.loggerEventos = loggerEventos;
         this.clock = clock;
@@ -93,7 +75,7 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
 
     @Transactional
     @Override
-    public OrdemDeServico createOrdemDeServico(String solicitacao, Long idCliente, Long idVeiculo, List<AdicionarPecaItemInputData> adicionarPecaItemInputData, List<Long> adicionarServicos) {
+    public OrdemDeServico createOrdemDeServico(String solicitacao, Long idCliente, Long idVeiculo) {
         try {
             Optional<Cliente> cOpt = this.clienteGateway.findById(idCliente);
             Optional<Veiculo> vOpt = this.veiculoGateway.findById(idVeiculo);
@@ -117,14 +99,6 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
 
             novaOs = this.osGateway.saveOrdemDeServico(novaOs);
             historicoStatusOrdemDeServicoGateway.registrarStatus(novaOs.getId(), StatusOrdemDeServico.RECEBIDA, ocorreuEm);
-
-            if (adicionarPecaItemInputData != null && !adicionarPecaItemInputData.isEmpty()) {
-                novaOs = adicionarPecasNaOrdemDeServico(novaOs, adicionarPecaItemInputData);
-            }
-
-            if (adicionarServicos != null && !adicionarServicos.isEmpty()) {
-                novaOs = adicionarServicosNaOrdemDeServico(novaOs, adicionarServicos);
-            }
 
             loggerEventos.registrarOrdemCriada(novaOs.getId(), novaOs.getStatus(), ocorreuEm);
             return novaOs;
@@ -245,8 +219,6 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
         switch (os.getStatus()) {
             case AGUARDANDO_APROVACAO -> dto.setMensagem(enviarEmailDeSoliciatacaoDeAprovacao(os));
             case APROVADA -> dto.setMensagem(receberEmailComAprovacao(os));
-            case EM_EXECUCAO -> dto.setMensagem(iniciarServicos(os));
-            case FINALIZADA -> dto.setMensagem(finalizarServicos(os));
             default -> dto.setMensagem(mensagem);
         };
 
@@ -263,241 +235,6 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
 
     private String receberEmailComReprovacao(OrdemDeServico os) {
         return "Email com a recusa de aprovação do cliente %s recebido!".formatted(os.getCliente().getNome());
-    }
-
-    private String iniciarServicos(OrdemDeServico os) {
-        os.getServicos().forEach(servico -> this.servicoUseCase.iniciarServico(servico.getId()));
-        return "Os servicos foram iniciados!";
-    }
-
-    private String finalizarServicos(OrdemDeServico os) {
-        os.getServicos().forEach(servico -> {
-            if (ServicoStatus.EM_EXECUCAO.equals(servico.getStatus())) this.servicoUseCase.finalizarServico(servico.getId());
-        });
-        return "Ordem de Serviço finalizada.";
-    }
-
-    private boolean alteracaoDeServicosOuPecasEPermitida(StatusOrdemDeServico osStatus) {
-        if (!StatusOrdemDeServico.RECEBIDA.equals(osStatus) && !StatusOrdemDeServico.EM_DIAGNOSTICO.equals(osStatus) && !StatusOrdemDeServico.AGUARDANDO_APROVACAO.equals(osStatus))
-            throw new BadRequestException("Alteração de Serviços e Peças só é permitida nos status '%s', '%s' e '%s', porém Ordem de Serviço se encontra no status '%s'!".formatted(StatusOrdemDeServico.RECEBIDA.name(), StatusOrdemDeServico.EM_DIAGNOSTICO.name(), StatusOrdemDeServico.AGUARDANDO_APROVACAO.name(), osStatus.name()));
-        return true;
-    }
-
-    @Transactional
-    @Override
-    public OrdemDeServico putServicosNaOrdemDeServico(Long id, List<Long> idTipoServicosParaAdicionar) {
-        if (idTipoServicosParaAdicionar != null && !idTipoServicosParaAdicionar.isEmpty()) {
-            Optional<OrdemDeServico> osOpt = this.osGateway.findOrdemDeServicoById(id);
-
-            if (osOpt.isPresent()) {
-                return adicionarServicosNaOrdemDeServico(osOpt.get(), idTipoServicosParaAdicionar);
-            }
-        }
-
-        return null;
-    }
-
-    @Transactional
-    protected OrdemDeServico adicionarServicosNaOrdemDeServico(OrdemDeServico os, List<Long> idTipoServicosParaAdicionar) {
-        if (os != null && alteracaoDeServicosOuPecasEPermitida(os.getStatus()) && idTipoServicosParaAdicionar != null && !idTipoServicosParaAdicionar.isEmpty()) {
-            List<Servico> servicosDaOs = os.getServicos();
-
-            List<Servico> servicosParaAdd = criarServicoParaAdicionarNaOrdemDeServico(os, idTipoServicosParaAdicionar);
-
-            if (!servicosParaAdd.isEmpty()) {
-                // Inicializa lista de serviços da entidade se necessário
-                if (servicosDaOs == null) {
-                    servicosDaOs = new ArrayList<>();
-                    os.setServicos(servicosDaOs);
-                }
-
-                List<Servico> servicosFinal = servicosDaOs;
-
-                servicosParaAdd.forEach(servicoAdd -> {
-                    var idTipoServicoParaAdd = servicoAdd.getTipoServico().getId();
-
-                    // Verifica se serviço já existe na Ordem de Serviço
-                    var tipoServicoJaExiste = servicosFinal.stream()
-                            .filter(sf -> sf.getTipoServico().getId().equals(idTipoServicoParaAdd))
-                            .findFirst();
-
-                    // Caso serviço já exista ele é ignorado
-                    if (tipoServicoJaExiste.isEmpty()) {
-                        servicosFinal.add(servicoAdd);
-                    }
-                });
-                os.calcularOrcamento();
-                os = this.osGateway.updateOrdemDeServico(os);
-
-                log.info("Serviços adicionadas à OS {} com sucesso! Orçamento atualizado é de R${}", os.getId(), os.getOrcamento());
-
-                return os;
-            }
-        }
-
-        return null;
-    }
-
-    protected List<Servico> criarServicoParaAdicionarNaOrdemDeServico(OrdemDeServico os, List<Long> idTipoServicosParaAdicionar) {
-        List<Long> idsTipoServicoDistintos = idTipoServicosParaAdicionar.stream().distinct().toList();
-        Map<Long, TipoServico> tipoServicoPorId = this.tipoServicoGateway.findAllById(idsTipoServicoDistintos).stream().collect(Collectors.toMap(TipoServico::getId, tipoServico -> tipoServico));
-
-        List<TipoServico> tipoServicos = idTipoServicosParaAdicionar.stream()
-                .map(tipoServicoPorId::get)
-                .filter(Objects::nonNull)
-                .toList();
-
-        List<Servico> servicos = new ArrayList<>();
-
-        tipoServicos.forEach(tipoServico -> {
-            Servico servico = Servico.criar(tipoServico, os);
-            servico.setStatus(ServicoStatus.AGUARDANDO_INICIO);
-            servicos.add(servico);
-        });
-
-        return servicos;
-    }
-
-    @Override
-    public OrdemDeServico deleteServicosDaOrdemDeServico(Long id, List<Long> idTipoServicosParaRemover) {
-        Optional<OrdemDeServico> osOpt = this.osGateway.findOrdemDeServicoById(id);
-
-        if (osOpt.isPresent() && alteracaoDeServicosOuPecasEPermitida(osOpt.get().getStatus()) && idTipoServicosParaRemover != null && !idTipoServicosParaRemover.isEmpty()) {
-            OrdemDeServico os = osOpt.get();
-            List<Servico> servicosAtuais = os.getServicos();
-
-            if (servicosAtuais != null && !servicosAtuais.isEmpty()) {
-                servicosAtuais.removeIf(servico -> idTipoServicosParaRemover.contains(servico.getTipoServico().getId()));
-                os.calcularOrcamento();
-                this.osGateway.updateOrdemDeServico(os);
-
-                log.info("Serviços removidos da OS {} com sucesso! Orçamento atualizado é de R${}", id, os.getOrcamento());
-
-                return os;
-            }
-        }
-
-        return null;
-    }
-
-    @Override
-    @Transactional
-    public OrdemDeServico putPecasNaOrdemDeServico(Long id, List<AdicionarPecaItemInputData> addPecaItemsInputData) {
-        Optional<OrdemDeServico> osOpt = this.osGateway.findOrdemDeServicoById(id);
-
-        if (osOpt.isPresent()) {
-            return adicionarPecasNaOrdemDeServico(osOpt.get(), addPecaItemsInputData);
-        }
-
-        return null;
-    }
-
-    @Transactional
-    protected OrdemDeServico adicionarPecasNaOrdemDeServico(OrdemDeServico os, List<AdicionarPecaItemInputData> addPecaItemsInputData) {
-        if (os != null && alteracaoDeServicosOuPecasEPermitida(os.getStatus()) && addPecaItemsInputData != null && !addPecaItemsInputData.isEmpty()) {
-            List<Peca> pecasDaOs = os.getPecas();
-            List<Peca> pecasParaAdd = criarPecasParaAdicionarNaOrdemDeServico(addPecaItemsInputData);
-
-            if (pecasParaAdd != null && !pecasParaAdd.isEmpty()) {
-
-                // Inicializa lista de peças da OS se necessário
-                if (pecasDaOs == null) {
-                    pecasDaOs = new ArrayList<>();
-                    os.setPecas(pecasDaOs);
-                }
-
-                List<Peca> finalPecasDaOs = pecasDaOs;
-
-                pecasParaAdd.forEach(pecaAdd -> {
-                    var idTipoPecaParaAdd = pecaAdd.getTipoPeca().getId();
-                    var quantidadeParaAdd = pecaAdd.getQuantidade();
-
-                    // Verifica se peça já existe na Ordem de Serviço
-                    var tipoPecaJaExiste = finalPecasDaOs.stream()
-                            .filter(pf -> pf.getTipoPeca().getId().equals(idTipoPecaParaAdd))
-                            .findFirst();
-
-                    // Caso peça já exista, só adicionamos a quantidade requisitada
-                    if (tipoPecaJaExiste.isPresent()) {
-                        Peca peca = tipoPecaJaExiste.get();
-                        peca.setQuantidade(peca.getQuantidade() + quantidadeParaAdd);
-                    } else {
-                        finalPecasDaOs.add(pecaAdd);
-                    }
-                });
-                os.calcularOrcamento();
-                os = this.osGateway.updateOrdemDeServico(os);
-
-                log.info("Peças adicionadas à OS {} com sucesso! Orçamento atualizado é de R${}", os.getId(), os.getOrcamento());
-
-                return os;
-            }
-        }
-
-        return null;
-    }
-
-    @Transactional
-    protected List<Peca> criarPecasParaAdicionarNaOrdemDeServico(List<AdicionarPecaItemInputData> addPecaItemsInputData) {
-        List<TipoPeca> tipoPecas = this.tipoPecaGateway.findAllByIds(addPecaItemsInputData.stream().map(AdicionarPecaItemInputData::getIdTipoPeca).toList());
-
-        if (tipoPecas != null && !tipoPecas.isEmpty()) {
-            Map<Long, Integer> quantidadeParaAddPorTipoPecaId = addPecaItemsInputData.stream().collect(Collectors.toMap(AdicionarPecaItemInputData::getIdTipoPeca, AdicionarPecaItemInputData::getQuantidade));
-            List<Peca> pecas = new ArrayList<>();
-
-            tipoPecas.forEach(tipoPeca -> {
-                var idTipoPecaParaAdd = tipoPeca.getId();
-                var quantidadeParaAdd = quantidadeParaAddPorTipoPecaId.get(idTipoPecaParaAdd);
-
-                if (tipoPeca.getQuantidadeEstoque() < quantidadeParaAdd) {
-                    throw new BadRequestException("Erro: O tipo peça id '%d' não possui a quantidade necessária em estoque! Requisitado: '%d', disponível: '%d'".formatted(tipoPeca.getId(), quantidadeParaAdd, tipoPeca.getQuantidadeEstoque()));
-                }
-
-                Peca peca = new Peca();
-                peca.setTipoPeca(tipoPeca);
-                peca.setQuantidade(quantidadeParaAdd);
-                pecas.add(peca);
-
-                tipoPeca.setQuantidadeEstoque(tipoPeca.getQuantidadeEstoque() - quantidadeParaAdd);
-            });
-
-            this.tipoPecaGateway.saveAll(tipoPecas);
-            return pecas;
-        }
-
-        return null;
-    }
-
-    @Transactional
-    @Override
-    public OrdemDeServico deletePecasDaOrdemDeServico(Long id, List<Long> idTipoPecasParaRemover) {
-        Optional<OrdemDeServico> osOpt = this.osGateway.findOrdemDeServicoById(id);
-
-        if (osOpt.isPresent() && alteracaoDeServicosOuPecasEPermitida(osOpt.get().getStatus()) && idTipoPecasParaRemover != null && !idTipoPecasParaRemover.isEmpty()) {
-            OrdemDeServico os = osOpt.get();
-            List<Peca> pecas = os.getPecas();
-            List<TipoPeca> tipoPecas = pecas.stream().map(Peca::getTipoPeca).collect(Collectors.toList());
-
-            if (pecas != null && !pecas.isEmpty()) {
-
-                // Adicionando a quantidade de volta no estoque
-                for (TipoPeca tp : tipoPecas) {
-                    var pecaOpt = pecas.stream().filter(p -> p.getTipoPeca().getId().equals(tp.getId()) && idTipoPecasParaRemover.contains(p.getTipoPeca().getId())).findFirst();
-                    pecaOpt.ifPresent(peca -> tp.setQuantidadeEstoque(tp.getQuantidadeEstoque() + peca.getQuantidade()));
-                }
-
-                pecas.removeIf(peca -> idTipoPecasParaRemover.contains(peca.getTipoPeca().getId()));
-
-                os.calcularOrcamento();
-                this.osGateway.updateOrdemDeServico(os);
-                this.tipoPecaGateway.saveAll(tipoPecas);
-                log.info("Peças removidas da OS {} com sucesso! Orçamento atualizado é de R${}", id, os.getOrcamento());
-
-                return os;
-            }
-        }
-
-        return null;
     }
 
     private String getMensagemOsNaoExiste(Long id) {

@@ -1,13 +1,10 @@
 package com.fiap.techchallenge.os.ordemservico.domain;
 
 import com.fiap.techchallenge.os.cliente.domain.Cliente;
-import com.fiap.techchallenge.os.peca.domain.Peca;
-import com.fiap.techchallenge.os.servico.domain.Servico;
 import com.fiap.techchallenge.os.veiculo.domain.Veiculo;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 
 public class OrdemDeServico {
 
@@ -18,12 +15,10 @@ public class OrdemDeServico {
     private LocalDateTime dataHoraCriacao;
     private Cliente cliente;
     private Veiculo veiculo;
-    private List<Peca> pecas;
-    private List<Servico> servicos;
 
     public OrdemDeServico() {}
 
-    public OrdemDeServico(Long id, StatusOrdemDeServico status, BigDecimal orcamento, String solicitacao, LocalDateTime dataHoraCriacao, Cliente cliente, Veiculo veiculo, List<Peca> pecas, List<Servico> servicos) {
+    public OrdemDeServico(Long id, StatusOrdemDeServico status, BigDecimal orcamento, String solicitacao, LocalDateTime dataHoraCriacao, Cliente cliente, Veiculo veiculo) {
         this.id = id;
         this.status = status;
         this.orcamento = orcamento;
@@ -31,8 +26,6 @@ public class OrdemDeServico {
         this.dataHoraCriacao = dataHoraCriacao;
         this.cliente = cliente;
         this.veiculo = veiculo;
-        this.pecas = pecas;
-        this.servicos = servicos;
     }
 
     // Getters e Setters
@@ -65,14 +58,6 @@ public class OrdemDeServico {
         return veiculo;
     }
 
-    public List<Peca> getPecas() {
-        return pecas;
-    }
-
-    public List<Servico> getServicos() {
-        return servicos;
-    }
-
     public void setId(Long id) {
         this.id = id;
     }
@@ -101,22 +86,9 @@ public class OrdemDeServico {
         this.veiculo = veiculo;
     }
 
-    public void setPecas(List<Peca> pecas) {
-        this.pecas = pecas;
-    }
-
-    public void setServicos(List<Servico> servicos) {
-        this.servicos = servicos;
-    }
-
     // Logica de dominio
 
     public record ValidacaoTransicaoDeStatus(boolean permitida, String erroDeValidacao) {}
-
-    public boolean podeEditarOuAdicionarServico() {
-        return this.status == StatusOrdemDeServico.EM_DIAGNOSTICO ||
-                this.status == StatusOrdemDeServico.RECEBIDA;
-    }
 
     public ValidacaoTransicaoDeStatus podeTransicionarParaStatus(StatusOrdemDeServico novoStatus) {
         return switch (novoStatus) {
@@ -125,10 +97,10 @@ public class OrdemDeServico {
                 yield new ValidacaoTransicaoDeStatus(permitida, permitida ? null : "Erro: A Ordem de Serviço %d deve estar no status '%s'!".formatted(this.id, StatusOrdemDeServico.RECEBIDA));
             }
             case AGUARDANDO_APROVACAO -> {
-                boolean permitida = this.status.equals(StatusOrdemDeServico.EM_DIAGNOSTICO) && this.orcamentoMaiorQueZero() && possuiPecasCadastradas() && possuiServicosCadastrados();
+                boolean permitida = this.status.equals(StatusOrdemDeServico.EM_DIAGNOSTICO) && this.orcamentoMaiorQueZero();
                 yield new ValidacaoTransicaoDeStatus(permitida, permitida
                         ? null
-                        : "Erro: A Ordem de Serviço %d deve estar no status '%s', deve possuir peças e serviços cadastrados e o orçamento deve estar calculado!".formatted(this.id, StatusOrdemDeServico.EM_DIAGNOSTICO));
+                        : "Erro: A Ordem de Serviço %d deve estar no status '%s', o orçamento deve ser maior que zero!".formatted(this.id, StatusOrdemDeServico.EM_DIAGNOSTICO));
             }
             case APROVADA -> {
                 boolean permitida = this.status.equals(StatusOrdemDeServico.AGUARDANDO_APROVACAO);
@@ -160,34 +132,5 @@ public class OrdemDeServico {
 
     public boolean orcamentoMaiorQueZero() {
         return this.orcamento != null && this.orcamento.compareTo(BigDecimal.ZERO) > 0;
-    }
-
-    public boolean possuiServicosCadastrados() {
-        return servicos != null && !servicos.isEmpty();
-    }
-
-    public boolean possuiPecasCadastradas() {
-        return pecas != null && !pecas.isEmpty();
-    }
-
-    public void calcularOrcamento() {
-        BigDecimal orcamento = BigDecimal.valueOf(0L, 2);
-
-        if (this.pecas != null && !this.pecas.isEmpty()) {
-            for (Peca peca : this.pecas) {
-                int quantidade = peca.getQuantidade();
-                BigDecimal valorUnitario = peca.getTipoPeca().getValorUnitario();
-                orcamento = orcamento.add(valorUnitario.multiply(BigDecimal.valueOf(quantidade)));
-            }
-        }
-
-        if (this.servicos != null && ! this.servicos.isEmpty()) {
-            for (Servico servico : this.servicos) {
-                BigDecimal valor = servico.getTipoServico().getValor();
-                orcamento = orcamento.add(valor);
-            }
-        }
-
-        this.orcamento = orcamento;
     }
 }

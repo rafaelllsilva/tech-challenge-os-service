@@ -144,7 +144,7 @@ public class OrdemDeServicoControllerTest {
         request.setIdVeiculo(123L);
         var os = criarOrdemDeServico(1L);
 
-        when(osUseCase.createOrdemDeServico(any(), any(), any(), any(), any())).thenReturn(os);
+        when(osUseCase.createOrdemDeServico(any(), any(), any())).thenReturn(os);
         when(osMapper.toResponse(any())).thenReturn(converterEmResponse(os));
 
         mockMvc.perform(post(CONTROLLER_PATH)

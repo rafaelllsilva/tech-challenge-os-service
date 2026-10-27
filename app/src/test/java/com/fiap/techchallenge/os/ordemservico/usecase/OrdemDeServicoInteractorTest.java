@@ -9,15 +9,6 @@ import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
 import com.fiap.techchallenge.os.exception.BadRequestException;
-import com.fiap.techchallenge.os.ordemservico.inputdata.AdicionarPecaItemInputData;
-import com.fiap.techchallenge.os.peca.domain.Peca;
-import com.fiap.techchallenge.os.peca.domain.TipoPeca;
-import com.fiap.techchallenge.os.peca.usecase.TipoPecaGateway;
-import com.fiap.techchallenge.os.servico.domain.Servico;
-import com.fiap.techchallenge.os.servico.domain.ServicoStatus;
-import com.fiap.techchallenge.os.servico.domain.TipoServico;
-import com.fiap.techchallenge.os.servico.usecase.ServicoUseCase;
-import com.fiap.techchallenge.os.servico.usecase.gateway.TipoServicoGateway;
 import com.fiap.techchallenge.os.veiculo.domain.Veiculo;
 import com.fiap.techchallenge.os.veiculo.usecase.VeiculoGateway;
 import org.junit.jupiter.api.Test;
@@ -32,7 +23,6 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -52,15 +42,6 @@ public class OrdemDeServicoInteractorTest {
 
     @Mock
     private VeiculoGateway veiculoGateway;
-
-    @Mock
-    private TipoServicoGateway tipoServicoGateway;
-
-    @Mock
-    private TipoPecaGateway tipoPecaGateway;
-
-    @Mock
-    private ServicoUseCase servicoUseCase;
 
     @Mock
     private OrdemDeServicoEventLogger eventLogger;
@@ -91,19 +72,6 @@ public class OrdemDeServicoInteractorTest {
         os.setVeiculo(veiculo);
         os.setCliente(cliente);
         return os;
-    }
-
-    private TipoPeca criarTipoPeca(Long id, BigDecimal valorUnitario, int quantidadeEstoque) {
-        TipoPeca tipoPeca = new TipoPeca();
-        tipoPeca.setId(id);
-        tipoPeca.setNome("Pastilha de freio");
-        tipoPeca.setValorUnitario(valorUnitario);
-        tipoPeca.setQuantidadeEstoque(quantidadeEstoque);
-        return tipoPeca;
-    }
-
-    private TipoServico criarTipoServico(Long id, BigDecimal valor) {
-        return new TipoServico(id, "Alinhamento", valor);
     }
 
     @BeforeEach
@@ -223,7 +191,7 @@ public class OrdemDeServicoInteractorTest {
         when(clienteGateway.findById(any())).thenReturn(Optional.of(cliente));
         when(veiculoGateway.findById(any())).thenReturn(Optional.of(veiculo));
 
-        var resultado = osUseCase.createOrdemDeServico(request.getSolicitacao(), request.getIdCliente(), request.getIdVeiculo(), null, null);
+        var resultado = osUseCase.createOrdemDeServico(request.getSolicitacao(), request.getIdCliente(), request.getIdVeiculo());
 
         assertNotNull(resultado);
         assertEquals(1L, resultado.getId());
@@ -241,7 +209,7 @@ public class OrdemDeServicoInteractorTest {
 
         when(clienteGateway.findById(999L)).thenReturn(Optional.empty());
 
-        assertThrows(BadRequestException.class, () -> osUseCase.createOrdemDeServico(request.getSolicitacao(), request.getIdCliente(), request.getIdVeiculo(), null, null));
+        assertThrows(BadRequestException.class, () -> osUseCase.createOrdemDeServico(request.getSolicitacao(), request.getIdCliente(), request.getIdVeiculo()));
         verify(osGateway, never()).saveOrdemDeServico(any());
         verify(eventLogger).registrarFalhaProcessamento(null, "creation", "BUSINESS_RULE_VIOLATION", Instant.parse("2026-08-29T12:00:00Z"), false);
     }
@@ -258,7 +226,7 @@ public class OrdemDeServicoInteractorTest {
         when(clienteGateway.findById(456L)).thenReturn(Optional.of(cliente));
         when(veiculoGateway.findById(999L)).thenReturn(Optional.empty());
 
-        assertThrows(BadRequestException.class, () -> osUseCase.createOrdemDeServico(request.getSolicitacao(), request.getIdCliente(), request.getIdVeiculo(), null, null));
+        assertThrows(BadRequestException.class, () -> osUseCase.createOrdemDeServico(request.getSolicitacao(), request.getIdCliente(), request.getIdVeiculo()));
         verify(osGateway, never()).saveOrdemDeServico(any());
     }
 
@@ -273,7 +241,7 @@ public class OrdemDeServicoInteractorTest {
         when(osGateway.saveOrdemDeServico(any())).thenThrow(new IllegalStateException("database unavailable"));
 
         assertThrows(IllegalStateException.class,
-                () -> osUseCase.createOrdemDeServico("Problema nos freios.", 456L, 123L, null, null));
+                () -> osUseCase.createOrdemDeServico("Problema nos freios.", 456L, 123L));
 
         verify(eventLogger).registrarFalhaProcessamento(null, "creation", "UNEXPECTED_ERROR", Instant.parse("2026-08-29T12:00:00Z"), true);
     }
@@ -381,17 +349,6 @@ public class OrdemDeServicoInteractorTest {
     @Test
     public void given_transicaoParaAguardandoAprovacao_when_mudaParaStatus_then_retornaSucessoComEmailEnviado() {
         var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        TipoPeca tipoPeca = criarTipoPeca(1L, BigDecimal.valueOf(50), 10);
-        Peca peca = new Peca();
-        peca.setTipoPeca(tipoPeca);
-        peca.setQuantidade(2);
-        TipoServico tipoServico = criarTipoServico(1L, BigDecimal.valueOf(200));
-        Servico servico = Servico.criar(tipoServico, os);
-        servico.setId(10L);
-        servico.setStatus(ServicoStatus.AGUARDANDO_INICIO);
-        os.setServicos(new ArrayList<>(List.of(servico)));
-        os.setPecas(new ArrayList<>(List.of(peca)));
-
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
         when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
 
@@ -414,62 +371,28 @@ public class OrdemDeServicoInteractorTest {
     }
 
     @Test
-    public void given_transicaoParaEmExecucao_when_mudaParaStatus_then_iniciaTodosOsServicos() {
+    public void given_transicaoParaEmExecucao_when_mudaParaStatus_then_retornaSucessoComMensagemGenerica() {
         var os = criarOrdemDeServico(1L, StatusOrdemDeServico.APROVADA);
-        TipoServico tipoServico = criarTipoServico(1L, BigDecimal.valueOf(200));
-        Servico servico = Servico.criar(tipoServico, os);
-        servico.setId(10L);
-        servico.setStatus(ServicoStatus.AGUARDANDO_INICIO);
-        os.setServicos(new ArrayList<>(List.of(servico)));
-
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
         when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
 
         var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.EM_EXECUCAO.toString());
 
         assertTrue(resultado.isSucesso());
-        assertTrue(resultado.getMensagem().contains("iniciados"));
-        verify(servicoUseCase).iniciarServico(10L);
+        assertTrue(resultado.getMensagem().contains("mudou para 'EM_EXECUCAO'"));
     }
 
     @Test
-    public void given_transicaoParaFinalizada_when_mudaParaStatus_then_finalizaTodosOsServicosEOrdemDeServico() {
+    public void given_transicaoParaFinalizada_when_mudaParaStatus_then_retornaSucessoComMensagemGenerica() {
         var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_EXECUCAO);
-        TipoServico tipoServico = criarTipoServico(1L, BigDecimal.valueOf(200));
-        Servico servico = Servico.criar(tipoServico, os);
-        servico.setId(10L);
-        servico.setStatus(ServicoStatus.EM_EXECUCAO);
-        os.setServicos(new ArrayList<>(List.of(servico)));
-
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
         when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
 
         var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.FINALIZADA.toString());
 
         assertTrue(resultado.isSucesso());
-        assertTrue(resultado.getMensagem().contains("finalizada"));
-        verify(servicoUseCase).finalizarServico(10L);
+        assertTrue(resultado.getMensagem().contains("mudou para 'FINALIZADA'"));
     }
-
-    @Test
-    public void given_transicaoParaFinalizadaQuandoClienteReprovou_when_mudaParaStatus_then_finalizaApenasOrdemDeServico() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_EXECUCAO);
-        TipoServico tipoServico = criarTipoServico(1L, BigDecimal.valueOf(200));
-        Servico servico = Servico.criar(tipoServico, os);
-        servico.setId(10L);
-        servico.setStatus(ServicoStatus.AGUARDANDO_INICIO);
-        os.setServicos(new ArrayList<>(List.of(servico)));
-
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
-
-        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.FINALIZADA.toString());
-
-        assertTrue(resultado.isSucesso());
-        assertTrue(resultado.getMensagem().contains("finalizada"));
-        verify(servicoUseCase, never()).finalizarServico(10L);
-    }
-
 
     @Test
     public void given_transicaoNaoPermitida_when_mudaParaStatus_then_retornaErro() {
@@ -505,298 +428,5 @@ public class OrdemDeServicoInteractorTest {
         assertTrue(resultado.getMensagem().contains("não existe"));
         verify(osGateway, never()).updateOrdemDeServico(any());
         verify(eventLogger).registrarFalhaProcessamento(1L, "status_transition", "ORDER_NOT_FOUND", Instant.parse("2026-08-29T12:00:00Z"), false);
-    }
-
-    // #################### adicionarServicosNaOrdemDeServico(Long, List<Long>) ####################
-
-    @Test
-    public void given_osEServicosExistem_when_adicionaServicos_then_retornaOsAtualizada() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        os.setServicos(new ArrayList<>());
-        os.setPecas(new ArrayList<>());
-        TipoServico tipoServico = criarTipoServico(10L, BigDecimal.valueOf(200));
-
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(tipoServicoGateway.findAllById(List.of(10L))).thenReturn(List.of(tipoServico));
-        when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
-
-        var resultado = osUseCase.putServicosNaOrdemDeServico(1L, List.of(10L));
-
-        assertNotNull(resultado);
-        assertEquals(1, os.getServicos().size());
-        verify(osGateway).updateOrdemDeServico(any());
-    }
-
-    @Test
-    public void given_osNaoExiste_when_adicionaServicos_then_retornaNulo() {
-        when(osGateway.findOrdemDeServicoById(99L)).thenReturn(Optional.empty());
-
-        var resultado = osUseCase.putServicosNaOrdemDeServico(99L, List.of(10L));
-
-        assertNull(resultado);
-        verify(osGateway, never()).updateOrdemDeServico(any());
-    }
-
-    @Test
-    public void given_statusInvalido_when_adicionaServicos_then_jogaExcecao() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.APROVADA);
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-
-        assertThrows(BadRequestException.class,
-                () -> osUseCase.putServicosNaOrdemDeServico(1L, List.of(10L)));
-    }
-
-    @Test
-    public void given_listaVazia_when_adicionaServicos_then_retornaNulo() {
-        var resultado = osUseCase.putServicosNaOrdemDeServico(1L, Collections.emptyList());
-
-        assertNull(resultado);
-        verify(osGateway, never()).updateOrdemDeServico(any());
-    }
-
-    @Test
-    public void given_tipoServicoNaoEncontrado_when_adicionaServicos_then_retornaNulo() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        os.setServicos(new ArrayList<>());
-
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(tipoServicoGateway.findAllById(any())).thenReturn(Collections.emptyList());
-
-        var resultado = osUseCase.putServicosNaOrdemDeServico(1L, List.of(99L));
-
-        assertNull(resultado);
-        verify(osGateway, never()).updateOrdemDeServico(any());
-    }
-
-    @Test
-    public void given_servicoJaExistente_when_adicionaServicos_then_ignoraDuplicataESalva() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        TipoServico tipoServico = criarTipoServico(10L, BigDecimal.valueOf(200));
-        os.setPecas(new ArrayList<>());
-
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(tipoServicoGateway.findAllById(List.of(10L))).thenReturn(List.of(tipoServico));
-        when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
-
-        var resultado = osUseCase.putServicosNaOrdemDeServico(1L, List.of(10L));
-
-        assertNotNull(resultado);
-        assertEquals(1, os.getServicos().size());
-    }
-
-    // #################### removerServicosDaOrdemDeServico(Long, List<Long>) ####################
-
-    @Test
-    public void given_osComServicos_when_removeServico_then_retornaOsAtualizada() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        TipoServico tipoServico = criarTipoServico(10L, BigDecimal.valueOf(200));
-        Servico servico = Servico.criar(tipoServico, os);
-        servico.setId(5L);
-        servico.setStatus(ServicoStatus.AGUARDANDO_INICIO);
-        os.setServicos(new ArrayList<>(List.of(servico)));
-        os.setPecas(new ArrayList<>());
-
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
-
-        var resultado = osUseCase.deleteServicosDaOrdemDeServico(1L, List.of(10L));
-
-        assertNotNull(resultado);
-        assertTrue(os.getServicos().isEmpty());
-        verify(osGateway).updateOrdemDeServico(any());
-    }
-
-    @Test
-    public void given_osNaoExiste_when_removeServico_then_retornaNulo() {
-        when(osGateway.findOrdemDeServicoById(99L)).thenReturn(Optional.empty());
-
-        var resultado = osUseCase.deleteServicosDaOrdemDeServico(99L, List.of(10L));
-
-        assertNull(resultado);
-        verify(osGateway, never()).updateOrdemDeServico(any());
-    }
-
-    @Test
-    public void given_statusInvalido_when_removeServico_then_jogaExcecao() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.APROVADA);
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-
-        assertThrows(BadRequestException.class,
-                () -> osUseCase.deleteServicosDaOrdemDeServico(1L, List.of(10L)));
-    }
-
-    @Test
-    public void given_listaVazia_when_removeServico_then_retornaNulo() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-
-        var resultado = osUseCase.deleteServicosDaOrdemDeServico(1L, Collections.emptyList());
-
-        assertNull(resultado);
-        verify(osGateway, never()).updateOrdemDeServico(any());
-    }
-
-    @Test
-    public void given_osSemServicos_when_removeServico_then_retornaNulo() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        os.setServicos(new ArrayList<>());
-
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-
-        var resultado = osUseCase.deleteServicosDaOrdemDeServico(1L, List.of(10L));
-
-        assertNull(resultado);
-        verify(osGateway, never()).updateOrdemDeServico(any());
-    }
-
-    // #################### adicionarPecasNaOrdemDeServico(Long, List<AdicionarPecaItem>) ####################
-
-    @Test
-    public void given_osEPecasExistem_when_adicionaPecas_then_retornaOsAtualizadaEDescontaEstoque() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        os.setPecas(new ArrayList<>());
-        os.setServicos(new ArrayList<>());
-        TipoPeca tipoPeca = criarTipoPeca(10L, BigDecimal.valueOf(50), 10);
-
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(tipoPecaGateway.findAllByIds(List.of(10L))).thenReturn(List.of(tipoPeca));
-        when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
-
-        var item = new AdicionarPecaItemInputData(10L, 3);
-        var resultado = osUseCase.putPecasNaOrdemDeServico(1L, List.of(item));
-
-        assertNotNull(resultado);
-        assertEquals(7, tipoPeca.getQuantidadeEstoque());
-        verify(osGateway).updateOrdemDeServico(any());
-        verify(tipoPecaGateway).saveAll(any());
-    }
-
-    @Test
-    public void given_osNaoExiste_when_adicionaPecas_then_retornaNulo() {
-        when(osGateway.findOrdemDeServicoById(99L)).thenReturn(Optional.empty());
-
-        var item = new AdicionarPecaItemInputData(10L, 3);
-        var resultado = osUseCase.putPecasNaOrdemDeServico(99L, List.of(item));
-
-        assertNull(resultado);
-    }
-
-    @Test
-    public void given_statusInvalido_when_adicionaPecas_then_jogaExcecao() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.APROVADA);
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-
-        var item = new AdicionarPecaItemInputData(10L, 3);
-        assertThrows(BadRequestException.class,
-                () -> osUseCase.putPecasNaOrdemDeServico(1L, List.of(item)));
-    }
-
-    @Test
-    public void given_estoqueInsuficiente_when_adicionaPecas_then_jogaExcecao() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        os.setPecas(new ArrayList<>());
-        TipoPeca tipoPeca = criarTipoPeca(10L, BigDecimal.valueOf(50), 1);
-
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(tipoPecaGateway.findAllByIds(List.of(10L))).thenReturn(List.of(tipoPeca));
-
-        var item = new AdicionarPecaItemInputData(10L, 5);
-        assertThrows(BadRequestException.class,
-                () -> osUseCase.putPecasNaOrdemDeServico(1L, List.of(item)));
-    }
-
-    @Test
-    public void given_tipoPecaNaoEncontrado_when_adicionaPecas_then_retornaNulo() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        os.setPecas(new ArrayList<>());
-
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(tipoPecaGateway.findAllByIds(List.of(99L))).thenReturn(List.of());
-
-        var item = new AdicionarPecaItemInputData(99L, 2);
-        var resultado = osUseCase.putPecasNaOrdemDeServico(1L, List.of(item));
-
-        assertNull(resultado);
-        verify(osGateway, never()).updateOrdemDeServico(any());
-    }
-
-    @Test
-    public void given_pecaJaExiste_when_adicionaPecas_then_incrementaQuantidadeEDescontaEstoque() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        TipoPeca tipoPeca = criarTipoPeca(10L, BigDecimal.valueOf(50), 10);
-        Peca pecaExistente = new Peca();
-        pecaExistente.setTipoPeca(tipoPeca);
-        pecaExistente.setQuantidade(2);
-        pecaExistente.setOrdemDeServico(os);
-        os.setPecas(new ArrayList<>(List.of(pecaExistente)));
-        os.setServicos(new ArrayList<>());
-
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(tipoPecaGateway.findAllByIds(List.of(10L))).thenReturn(List.of(tipoPeca));
-        when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
-
-        var item = new AdicionarPecaItemInputData(10L, 3);
-        var resultado = osUseCase.putPecasNaOrdemDeServico(1L, List.of(item));
-
-        assertNotNull(resultado);
-        assertEquals(5, pecaExistente.getQuantidade());
-        assertEquals(7, tipoPeca.getQuantidadeEstoque());
-    }
-
-    // #################### removerPecasDaOrdemDeServico(Long, List<Long>) ####################
-
-    @Test
-    public void given_osComPecas_when_removePecas_then_retornaOsAtualizadaERestauraEstoque() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        TipoPeca tipoPeca = criarTipoPeca(10L, BigDecimal.valueOf(50), 5);
-        Peca peca = new Peca();
-        peca.setTipoPeca(tipoPeca);
-        peca.setQuantidade(3);
-        peca.setOrdemDeServico(os);
-        os.setPecas(new ArrayList<>(List.of(peca)));
-        os.setServicos(new ArrayList<>());
-
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
-
-        var resultado = osUseCase.deletePecasDaOrdemDeServico(1L, List.of(10L));
-
-        assertNotNull(resultado);
-        assertTrue(os.getPecas().isEmpty());
-        assertEquals(8, tipoPeca.getQuantidadeEstoque());
-        verify(osGateway).updateOrdemDeServico(any());
-        verify(tipoPecaGateway).saveAll(any());
-    }
-
-    @Test
-    public void given_osNaoExiste_when_removePecas_then_retornaNulo() {
-        when(osGateway.findOrdemDeServicoById(99L)).thenReturn(Optional.empty());
-
-        var resultado = osUseCase.deletePecasDaOrdemDeServico(99L, List.of(10L));
-
-        assertNull(resultado);
-        verify(osGateway, never()).updateOrdemDeServico(any());
-    }
-
-    @Test
-    public void given_statusInvalido_when_removePecas_then_jogaExcecao() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_EXECUCAO);
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-
-        assertThrows(BadRequestException.class,
-                () -> osUseCase.deletePecasDaOrdemDeServico(1L, List.of(10L)));
-    }
-
-    @Test
-    public void given_osSemPecas_when_removePecas_then_retornaNulo() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        os.setPecas(new ArrayList<>());
-
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-
-        var resultado = osUseCase.deletePecasDaOrdemDeServico(1L, List.of(10L));
-
-        assertNull(resultado);
-        verify(osGateway, never()).updateOrdemDeServico(any());
     }
 }

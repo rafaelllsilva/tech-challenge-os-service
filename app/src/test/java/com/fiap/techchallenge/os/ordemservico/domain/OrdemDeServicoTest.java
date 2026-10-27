@@ -2,15 +2,9 @@ package com.fiap.techchallenge.os.ordemservico.domain;
 
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
-import com.fiap.techchallenge.os.peca.domain.Peca;
-import com.fiap.techchallenge.os.peca.domain.TipoPeca;
-import com.fiap.techchallenge.os.servico.domain.Servico;
-import com.fiap.techchallenge.os.servico.domain.ServicoStatus;
-import com.fiap.techchallenge.os.servico.domain.TipoServico;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -53,30 +47,10 @@ public class OrdemDeServicoTest {
     }
 
     @Test
-    public void given_statusEmDiagnosticoComOrcamentoPecasEServicos_when_transicionaParaAguardandoAprovacao_then_transicaoPermitida() {
+    public void given_statusEmDiagnosticoComOrcamento_when_transicionaParaAguardandoAprovacao_then_transicaoPermitida() {
         var os = new OrdemDeServico();
         os.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
-
-        var tipoServico = new TipoServico(1L, "Troca de Óleo", new BigDecimal("150.00"));
-        var servico = new Servico(1L, tipoServico, os, ServicoStatus.AGUARDANDO_INICIO, null, null);
-
-        var tipoPeca = new TipoPeca();
-        tipoPeca.setId(1L);
-        tipoPeca.setNome("Óleo de motor");
-        tipoPeca.setValorUnitario(BigDecimal.valueOf(120L, 2));
-        tipoPeca.setQuantidadeEstoque(20);
-
-        var peca = new Peca();
-        peca.setId(1L);
-        peca.setTipoPeca(tipoPeca);
-        peca.setOrdemDeServico(os);
-        peca.setQuantidade(1);
-
-        BigDecimal orcamento = tipoServico.getValor().add(tipoServico.getValor());
-
-        os.setOrcamento(orcamento);
-        os.setPecas(List.of(peca));
-        os.setServicos(List.of(servico));
+        os.setOrcamento(new BigDecimal("300.00"));
 
         OrdemDeServico.ValidacaoTransicaoDeStatus validacao = os.podeTransicionarParaStatus(StatusOrdemDeServico.AGUARDANDO_APROVACAO);
 
@@ -140,28 +114,6 @@ public class OrdemDeServicoTest {
         OrdemDeServico os = new OrdemDeServico();
         os.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
         os.setOrcamento(BigDecimal.ZERO);
-
-        OrdemDeServico.ValidacaoTransicaoDeStatus validacao = os.podeTransicionarParaStatus(StatusOrdemDeServico.AGUARDANDO_APROVACAO);
-
-        assertFalse(validacao.permitida());
-    }
-
-    @Test
-    public void given_statusEmDiagnosticoSemPecasCadastradas_when_transicionaParaAguardandoAprovacao_then_transicaoNaoPermitida() {
-        OrdemDeServico os = new OrdemDeServico();
-        os.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
-        os.setOrcamento(BigDecimal.valueOf(1000L, 2));
-
-        OrdemDeServico.ValidacaoTransicaoDeStatus validacao = os.podeTransicionarParaStatus(StatusOrdemDeServico.AGUARDANDO_APROVACAO);
-
-        assertFalse(validacao.permitida());
-    }
-
-    @Test
-    public void given_statusEmDiagnosticoSemServicosCadastrados_when_transicionaParaAguardandoAprovacao_then_transicaoNaoPermitida() {
-        OrdemDeServico os = new OrdemDeServico();
-        os.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
-        os.setOrcamento(BigDecimal.valueOf(1000L, 2));
 
         OrdemDeServico.ValidacaoTransicaoDeStatus validacao = os.podeTransicionarParaStatus(StatusOrdemDeServico.AGUARDANDO_APROVACAO);
 

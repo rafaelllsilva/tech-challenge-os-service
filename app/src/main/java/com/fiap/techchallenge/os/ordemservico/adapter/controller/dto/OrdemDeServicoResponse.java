@@ -1,8 +1,6 @@
 package com.fiap.techchallenge.os.ordemservico.adapter.controller.dto;
 
 import com.fiap.techchallenge.os.cliente.adapter.controller.dto.ClienteResponse;
-import com.fiap.techchallenge.os.peca.adapter.controller.dto.PecaResponse;
-import com.fiap.techchallenge.os.servico.adapter.controller.dto.ServicoResponseDTO;
 import com.fiap.techchallenge.os.veiculo.adapter.controller.dto.VeiculoResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,7 +9,6 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Builder
 @Data
@@ -25,6 +22,4 @@ public class OrdemDeServicoResponse {
     private LocalDateTime dataHoraCriacao;
     private ClienteResponse cliente;
     private VeiculoResponse veiculo;
-    private List<ServicoResponseDTO> servicos;
-    private List<PecaResponse> pecas;
 }

@@ -3,8 +3,6 @@ package com.fiap.techchallenge.os.ordemservico.adapter.controller.dto;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-import java.util.List;
-
 @Data
 public class CreateOrdemDeServicoRequest {
 
@@ -16,8 +14,4 @@ public class CreateOrdemDeServicoRequest {
 
     @NotNull(message = "Id do Veículo não pode ser nulo!")
     private Long idVeiculo;
-
-    private List<AdicionarPecaItemRequest> pecas;
-
-    private List<Long> servicos;
 }

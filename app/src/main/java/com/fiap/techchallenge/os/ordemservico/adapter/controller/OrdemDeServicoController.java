@@ -5,7 +5,6 @@ import com.fiap.techchallenge.os.ordemservico.adapter.presenter.OrdemDeServicoMa
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.usuario.domain.Role;
 import com.fiap.techchallenge.os.usuario.domain.Usuario;
-import com.fiap.techchallenge.os.ordemservico.inputdata.AdicionarPecaItemInputData;
 import com.fiap.techchallenge.os.ordemservico.usecase.OrdemDeServicoUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -117,10 +116,7 @@ public class OrdemDeServicoController {
             @ApiResponse(responseCode = "400", description = "Dados inválidos para criação", content = @Content)
     })
     public ResponseEntity<OrdemDeServicoResponse> createOrdemDeServico(@RequestBody @Valid CreateOrdemDeServicoRequest request) {
-        List<AdicionarPecaItemInputData> addPecaItemsInputData = request.getPecas() != null && !request.getPecas().isEmpty()
-                ? request.getPecas().stream().map(reqPecaItem -> new AdicionarPecaItemInputData(reqPecaItem.getIdTipoPeca(), reqPecaItem.getQuantidade())).toList()
-                : null;
-        var os = this.osUseCase.createOrdemDeServico(request.getSolicitacao(), request.getIdCliente(), request.getIdVeiculo(), addPecaItemsInputData, request.getServicos());
+        var os = this.osUseCase.createOrdemDeServico(request.getSolicitacao(), request.getIdCliente(), request.getIdVeiculo());
         return ResponseEntity.created(URI.create(CONTROLLER_PATH + os.getId().toString())).body(osMapper.toResponse(os));
     }
 
@@ -152,55 +148,6 @@ public class OrdemDeServicoController {
     // ###########################################################################################
     // # Comandos do Mecanico
     // ###########################################################################################
-    @PutMapping("adicionarServicos/{id}")
-    @Operation(summary = "Adicionar serviços à OS", description = "Inclui tipos de serviço na ordem de serviço durante o diagnóstico")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Serviços adicionados com sucesso",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Operação inválida para o estado atual da OS", content = @Content)
-    })
-    public ResponseEntity<OrdemDeServicoResponse> adicionarServicosNaOrdemDeServico(@PathVariable Long id, @RequestBody AdicionarServicosRequest request) {
-        var osAtualizada = this.osUseCase.putServicosNaOrdemDeServico(id, request.getIdTipoServicos());
-        return osAtualizada != null ? ResponseEntity.ok(osMapper.toResponse(osAtualizada)) : ResponseEntity.badRequest().build();
-    }
-
-    @DeleteMapping("removerServicos/{id}")
-    @Operation(summary = "Remover serviços da OS", description = "Remove tipos de serviço da ordem de serviço durante o diagnóstico")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Serviços removidos com sucesso",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Operação inválida para o estado atual da OS", content = @Content)
-    })
-    public ResponseEntity<OrdemDeServicoResponse> removerServicosDaOrdemDeServico(@PathVariable Long id, @RequestBody RemoverServicosRequest request) {
-        var osAtualizada = this.osUseCase.deleteServicosDaOrdemDeServico(id, request.getIdTipoServicos());
-        return osAtualizada != null ? ResponseEntity.ok(osMapper.toResponse(osAtualizada)) : ResponseEntity.badRequest().build();
-    }
-
-    @PutMapping("adicionarPecas/{id}")
-    @Operation(summary = "Adicionar peças à OS", description = "Inclui peças e insumos na ordem de serviço durante o diagnóstico")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Peças adicionadas com sucesso",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Operação inválida para o estado atual da OS ou estoque insuficiente", content = @Content)
-    })
-    public ResponseEntity<OrdemDeServicoResponse> adicionarPecasNaOrdemDeServico(@PathVariable Long id, @RequestBody AdicionarPecasRequest req) {
-        List<AdicionarPecaItemInputData> addPecaItemsInputData = req.getPecasParaAdd().stream().map(reqPecaItem -> new AdicionarPecaItemInputData(reqPecaItem.getIdTipoPeca(), reqPecaItem.getQuantidade())).toList();
-        var osAtualizada = this.osUseCase.putPecasNaOrdemDeServico(id, addPecaItemsInputData);
-        return osAtualizada != null ? ResponseEntity.ok(osMapper.toResponse(osAtualizada)) : ResponseEntity.badRequest().build();
-    }
-
-    @DeleteMapping("removerPecas/{id}")
-    @Operation(summary = "Remover peças da OS", description = "Remove peças e insumos da ordem de serviço durante o diagnóstico")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Peças removidas com sucesso",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Operação inválida para o estado atual da OS", content = @Content)
-    })
-    public ResponseEntity<OrdemDeServicoResponse> removerPecasDaOrdemDeServico(@PathVariable Long id, @RequestBody RemoverPecasRequest req) {
-        var osAtualizada = this.osUseCase.deletePecasDaOrdemDeServico(id, req.getIdTipoPecasParaRemover());
-        return osAtualizada != null ? ResponseEntity.ok(osMapper.toResponse(osAtualizada)) : ResponseEntity.badRequest().build();
-    }
-
     @PostMapping("transicao/paraDiagnostico/{id}")
     @Operation(summary = "Webhook para iniciar diagnóstico", description = "Endpoint chamado por sistema externo para notificar que a diagnóstico deve ser iniciado")
     @ApiResponses(value = {

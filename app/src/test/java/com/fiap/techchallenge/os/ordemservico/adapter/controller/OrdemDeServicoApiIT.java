@@ -18,9 +18,6 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -312,209 +309,6 @@ public class OrdemDeServicoApiIT {
     }
 
     @Test
-    public void given_idValidoETipoServicoExistente_when_adicionarServicosNaOrdemDeServico_then_retorna200() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
-
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS para adicionar serviços");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Muda para EM_DIAGNOSTICO para permitir adição de serviços
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Adiciona serviço (ID 1 é o tipo de serviço padrão nos testes)
-        var requestServico = new HashMap<String, List<Long>>();
-        requestServico.put("idTipoServicos", List.of(1L));
-
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarServicos/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestServico)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.servicos").isArray())
-                .andExpect(jsonPath("$.servicos").isNotEmpty());
-    }
-
-    @Test
-    public void given_idInvalido_when_adicionarServicosNaOrdemDeServico_then_retorna400() throws Exception {
-        var requestServico = new HashMap<String, List<Long>>();
-        requestServico.put("idTipoServicos", List.of(1L));
-
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarServicos/999999")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestServico)))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    public void given_idValido_when_removerServicosDaOrdemDeServico_then_retorna200() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
-
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS para remover serviços");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Muda para EM_DIAGNOSTICO
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Primeiro adiciona um serviço
-        var requestAdicionar = new HashMap<String, List<Long>>();
-        requestAdicionar.put("idTipoServicos", List.of(1L));
-
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarServicos/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestAdicionar)))
-                .andExpect(status().isOk());
-
-        // Agora remove o serviço
-        var requestRemover = new HashMap<String, List<Long>>();
-        requestRemover.put("idTipoServicos", List.of(1L));
-
-        mockMvc.perform(delete(CONTROLLER_PATH + "removerServicos/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestRemover)))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    public void given_idInvalido_when_removerServicosDaOrdemDeServico_then_retorna400() throws Exception {
-        var requestServico = new HashMap<String, List<Long>>();
-        requestServico.put("idTipoServicos", List.of(1L));
-
-        mockMvc.perform(delete(CONTROLLER_PATH + "removerServicos/999999")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestServico)))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    public void given_idValidoETipoPecaExistente_when_adicionarPecasNaOrdemDeServico_then_retorna200() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
-
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS para adicionar peças");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Muda para EM_DIAGNOSTICO
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Adiciona peça (ID 1 é o tipo de peça padrão nos testes)
-        var requestPecas = new HashMap<String, List<Map<String, Object>>>();
-        var pecaItem = new HashMap<String, Object>();
-        pecaItem.put("idTipoPeca", 1L);
-        pecaItem.put("quantidade", 2);
-        requestPecas.put("pecasParaAdd", List.of(pecaItem));
-
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarPecas/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestPecas)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.pecas").isArray())
-                .andExpect(jsonPath("$.pecas").isNotEmpty());
-    }
-
-    @Test
-    public void given_idInvalido_when_adicionarPecasNaOrdemDeServico_then_retorna400() throws Exception {
-        var requestPecas = new HashMap<String, List<Map<String, Object>>>();
-        var pecaItem = new HashMap<String, Object>();
-        pecaItem.put("idTipoPeca", 1L);
-        pecaItem.put("quantidade", 2);
-        requestPecas.put("pecasParaAdd", List.of(pecaItem));
-
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarPecas/999999")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestPecas)))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    public void given_idValido_when_removerPecasDaOrdemDeServico_then_retorna200() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
-
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS para remover peças");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Muda para EM_DIAGNOSTICO
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Primeiro adiciona uma peça
-        var requestAdicionar = new HashMap<String, List<Map<String, Object>>>();
-        var pecaItem = new HashMap<String, Object>();
-        pecaItem.put("idTipoPeca", 1L);
-        pecaItem.put("quantidade", 2);
-        requestAdicionar.put("pecasParaAdd", List.of(pecaItem));
-
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarPecas/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestAdicionar)))
-                .andExpect(status().isOk());
-
-        // Agora remove a peça
-        var requestRemover = new HashMap<String, List<Long>>();
-        requestRemover.put("idTipoPecasParaRemover", List.of(1L));
-
-        mockMvc.perform(delete(CONTROLLER_PATH + "removerPecas/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestRemover)))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    public void given_idInvalido_when_removerPecasDaOrdemDeServico_then_retorna400() throws Exception {
-        var requestPecas = new HashMap<String, List<Long>>();
-        requestPecas.put("idTipoPecasParaRemover", List.of(1L));
-
-        mockMvc.perform(delete(CONTROLLER_PATH + "removerPecas/999999")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestPecas)))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
     public void given_osEmDiagnosticoComOrcamento_when_enviarParaAprovacaoDoCliente_then_retorna200() throws Exception {
         Long clienteId = getClienteId();
         Long veiculoId = getVeiculo();
@@ -536,25 +330,8 @@ public class OrdemDeServicoApiIT {
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isOk());
 
-        // Adiciona serviço e peça para ter orçamento > 0
-        var requestServico = new HashMap<String, List<Long>>();
-        requestServico.put("idTipoServicos", List.of(1L));
-
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarServicos/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestServico)))
-                .andExpect(status().isOk());
-
-        var requestPeca = new HashMap<String, List<Map<String, Object>>>();
-        var pecaItem = new HashMap<String, Object>();
-        pecaItem.put("idTipoPeca", 1L);
-        pecaItem.put("quantidade", 1);
-        requestPeca.put("pecasParaAdd", List.of(pecaItem));
-
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarPecas/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestPeca)))
-                .andExpect(status().isOk());
+        // Define o orçamento (> 0) para permitir enviar para aprovação
+        definirOrcamento(osId, BigDecimal.valueOf(300.00));
 
         // Agora envia para aprovação
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
@@ -580,7 +357,7 @@ public class OrdemDeServicoApiIT {
 
         Long osId = getIdDeOrdemDeServicoCriada(resultado);
 
-        // Muda para EM_DIAGNOSTICO mas não adiciona serviços/peças
+        // Muda para EM_DIAGNOSTICO mas sem definir orçamento
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isOk());
 
@@ -612,23 +389,8 @@ public class OrdemDeServicoApiIT {
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isOk());
 
-        // Adiciona serviço e peça
-        var requestServico = new HashMap<String, List<Long>>();
-        requestServico.put("idTipoServicos", List.of(1L));
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarServicos/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestServico)))
-                .andExpect(status().isOk());
-
-        var requestPeca = new HashMap<String, List<Map<String, Object>>>();
-        var pecaItem = new HashMap<String, Object>();
-        pecaItem.put("idTipoPeca", 1L);
-        pecaItem.put("quantidade", 1);
-        requestPeca.put("pecasParaAdd", List.of(pecaItem));
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarPecas/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestPeca)))
-                .andExpect(status().isOk());
+        // Define o orçamento (> 0) para permitir enviar para aprovação
+        definirOrcamento(osId, BigDecimal.valueOf(300.00));
 
         // Envia para aprovação
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
@@ -693,22 +455,8 @@ public class OrdemDeServicoApiIT {
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isOk());
 
-        var requestServico = new HashMap<String, List<Long>>();
-        requestServico.put("idTipoServicos", List.of(1L));
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarServicos/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestServico)))
-                .andExpect(status().isOk());
-
-        var requestPeca = new HashMap<String, List<Map<String, Object>>>();
-        var pecaItem = new HashMap<String, Object>();
-        pecaItem.put("idTipoPeca", 1L);
-        pecaItem.put("quantidade", 1);
-        requestPeca.put("pecasParaAdd", List.of(pecaItem));
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarPecas/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestPeca)))
-                .andExpect(status().isOk());
+        // Define o orçamento (> 0) para permitir enviar para aprovação
+        definirOrcamento(osId, BigDecimal.valueOf(300.00));
 
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isOk());
@@ -774,22 +522,8 @@ public class OrdemDeServicoApiIT {
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isOk());
 
-        var requestServico = new HashMap<String, List<Long>>();
-        requestServico.put("idTipoServicos", List.of(1L));
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarServicos/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestServico)))
-                .andExpect(status().isOk());
-
-        var requestPeca = new HashMap<String, List<Map<String, Object>>>();
-        var pecaItem = new HashMap<String, Object>();
-        pecaItem.put("idTipoPeca", 1L);
-        pecaItem.put("quantidade", 1);
-        requestPeca.put("pecasParaAdd", List.of(pecaItem));
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarPecas/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestPeca)))
-                .andExpect(status().isOk());
+        // Define o orçamento (> 0) para permitir enviar para aprovação
+        definirOrcamento(osId, BigDecimal.valueOf(300.00));
 
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId)
                 .header("X-Webhook-Secret", "webhook-secret-key-123"))
@@ -859,22 +593,8 @@ public class OrdemDeServicoApiIT {
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isOk());
 
-        var requestServico = new HashMap<String, List<Long>>();
-        requestServico.put("idTipoServicos", List.of(1L));
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarServicos/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestServico)))
-                .andExpect(status().isOk());
-
-        var requestPeca = new HashMap<String, List<Map<String, Object>>>();
-        var pecaItem = new HashMap<String, Object>();
-        pecaItem.put("idTipoPeca", 1L);
-        pecaItem.put("quantidade", 1);
-        requestPeca.put("pecasParaAdd", List.of(pecaItem));
-        mockMvc.perform(put(CONTROLLER_PATH + "adicionarPecas/" + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestPeca)))
-                .andExpect(status().isOk());
+        // Define o orçamento (> 0) para permitir enviar para aprovação
+        definirOrcamento(osId, BigDecimal.valueOf(300.00));
 
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isOk());
@@ -916,6 +636,16 @@ public class OrdemDeServicoApiIT {
     }
 
     // Helpers
+
+    private void definirOrcamento(Long osId, BigDecimal orcamento) throws Exception {
+        UpdateOrdemDeServicoRequest updateRequest = new UpdateOrdemDeServicoRequest();
+        updateRequest.setOrcamento(orcamento);
+
+        mockMvc.perform(put(CONTROLLER_PATH + osId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isOk());
+    }
 
     private Long getClienteId() {
         return 1L;

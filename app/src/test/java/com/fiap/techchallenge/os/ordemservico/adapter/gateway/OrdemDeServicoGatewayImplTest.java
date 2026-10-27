@@ -11,7 +11,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -125,25 +124,6 @@ public class OrdemDeServicoGatewayImplTest {
         var resultado = gateway.findOrdemDeServicoById(999L);
 
         assertTrue(resultado.isEmpty());
-    }
-
-    @Test
-    public void given_ordemComPecasEServicos_when_buscaPorId_then_retornaOrdemCompleta() {
-        var osEntity = new OrdemDeServicoEntity();
-        osEntity.setId(1L);
-        osEntity.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
-        osEntity.setSolicitacao("Problema nos freios.");
-        osEntity.setOrcamento(BigDecimal.valueOf(100));
-        osEntity.setPecas(null);
-        osEntity.setServicos(null);
-
-        when(repository.findById(1L)).thenReturn(Optional.of(osEntity));
-
-        var resultado = gateway.findOrdemDeServicoById(1L);
-
-        assertTrue(resultado.isPresent());
-        assertNull(resultado.get().getPecas());
-        assertNull(resultado.get().getServicos());
     }
 
     // #################### findAllOrdensDeServicoClienteId(Long clienteId) ####################
@@ -336,39 +316,6 @@ public class OrdemDeServicoGatewayImplTest {
     }
 
     @Test
-    public void given_ordemComPecasEServicos_when_atualizaOrdem_then_atualizaTambemPecasEServicos() {
-        var os = new OrdemDeServico();
-        os.setId(1L);
-        os.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
-        os.setSolicitacao("Problema nos freios.");
-        os.setOrcamento(BigDecimal.valueOf(100));
-        os.setPecas(new ArrayList<>());
-        os.setServicos(new ArrayList<>());
-
-        var osEntityExistente = new OrdemDeServicoEntity();
-        osEntityExistente.setId(1L);
-        osEntityExistente.setStatus(StatusOrdemDeServico.RECEBIDA);
-        osEntityExistente.setSolicitacao("Problema nos freios.");
-        osEntityExistente.setOrcamento(BigDecimal.valueOf(100));
-
-        var osEntityAtualizada = new OrdemDeServicoEntity();
-        osEntityAtualizada.setId(1L);
-        osEntityAtualizada.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
-        osEntityAtualizada.setSolicitacao("Problema nos freios.");
-        osEntityAtualizada.setOrcamento(BigDecimal.valueOf(100));
-        osEntityAtualizada.setPecas(new ArrayList<>());
-        osEntityAtualizada.setServicos(new ArrayList<>());
-
-        when(repository.findById(1L)).thenReturn(Optional.of(osEntityExistente));
-        when(repository.save(any(OrdemDeServicoEntity.class))).thenReturn(osEntityAtualizada);
-
-        var resultado = gateway.updateOrdemDeServico(os);
-
-        assertNotNull(resultado);
-        verify(repository).save(any(OrdemDeServicoEntity.class));
-    }
-
-    @Test
     public void given_ordemNaoExiste_when_atualizaOrdem_then_lancaExcecao() {
         var os = new OrdemDeServico();
         os.setId(999L);
@@ -383,37 +330,6 @@ public class OrdemDeServicoGatewayImplTest {
     @Test
     public void given_ordemNula_when_atualizaOrdem_then_lancaExcecao() {
         assertThrows(NullPointerException.class, () -> gateway.updateOrdemDeServico(null));
-    }
-
-    @Test
-    public void given_pecasVaziasdaOrdem_when_atualizaOrdem_then_limpaAsPecas() {
-        var os = new OrdemDeServico();
-        os.setId(1L);
-        os.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
-        os.setSolicitacao("Problema nos freios.");
-        os.setOrcamento(BigDecimal.valueOf(100));
-        os.setPecas(new ArrayList<>());
-
-        var osEntityExistente = new OrdemDeServicoEntity();
-        osEntityExistente.setId(1L);
-        osEntityExistente.setStatus(StatusOrdemDeServico.RECEBIDA);
-        osEntityExistente.setSolicitacao("Problema nos freios.");
-        osEntityExistente.setOrcamento(BigDecimal.valueOf(100));
-
-        var osEntityAtualizada = new OrdemDeServicoEntity();
-        osEntityAtualizada.setId(1L);
-        osEntityAtualizada.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
-        osEntityAtualizada.setSolicitacao("Problema nos freios.");
-        osEntityAtualizada.setOrcamento(BigDecimal.valueOf(100));
-        osEntityAtualizada.setPecas(new ArrayList<>());
-
-        when(repository.findById(1L)).thenReturn(Optional.of(osEntityExistente));
-        when(repository.save(any(OrdemDeServicoEntity.class))).thenReturn(osEntityAtualizada);
-
-        var resultado = gateway.updateOrdemDeServico(os);
-
-        assertNotNull(resultado);
-        verify(repository).save(any(OrdemDeServicoEntity.class));
     }
 
     // #################### deleteOrdemDeServico(OrdemDeServico os) ####################
@@ -487,53 +403,6 @@ public class OrdemDeServicoGatewayImplTest {
     }
 
     @Test
-    public void given_entityComPecasEServicos_when_converteToDomain_then_mapeiaTodasAsColecoes() {
-        var osEntity = new OrdemDeServicoEntity();
-        osEntity.setId(1L);
-        osEntity.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
-        osEntity.setSolicitacao("Problema nos freios.");
-        osEntity.setOrcamento(BigDecimal.valueOf(100));
-        osEntity.setPecas(null);
-        osEntity.setServicos(null);
-
-        var resultado = OrdemDeServicoGatewayImpl.toDomain(osEntity);
-
-        assertNotNull(resultado);
-        assertNull(resultado.getPecas());
-        assertNull(resultado.getServicos());
-    }
-
-    @Test
-    public void given_entitySemPecas_when_converteToDomain_then_pecasRetornaNulo() {
-        var osEntity = new OrdemDeServicoEntity();
-        osEntity.setId(1L);
-        osEntity.setStatus(StatusOrdemDeServico.RECEBIDA);
-        osEntity.setSolicitacao("Problema nos freios.");
-        osEntity.setOrcamento(BigDecimal.valueOf(100));
-        osEntity.setPecas(null);
-
-        var resultado = OrdemDeServicoGatewayImpl.toDomain(osEntity);
-
-        assertNotNull(resultado);
-        assertNull(resultado.getPecas());
-    }
-
-    @Test
-    public void given_entitySemServicos_when_converteToDomain_then_servicosRetornaNulo() {
-        var osEntity = new OrdemDeServicoEntity();
-        osEntity.setId(1L);
-        osEntity.setStatus(StatusOrdemDeServico.RECEBIDA);
-        osEntity.setSolicitacao("Problema nos freios.");
-        osEntity.setOrcamento(BigDecimal.valueOf(100));
-        osEntity.setServicos(null);
-
-        var resultado = OrdemDeServicoGatewayImpl.toDomain(osEntity);
-
-        assertNotNull(resultado);
-        assertNull(resultado.getServicos());
-    }
-
-    @Test
     public void given_entityComClienteNulo_when_converteToDomain_then_clienteRetornaNulo() {
         var osEntity = new OrdemDeServicoEntity();
         osEntity.setId(1L);
@@ -583,41 +452,6 @@ public class OrdemDeServicoGatewayImplTest {
         var resultado = OrdemDeServicoGatewayImpl.toEntity(null);
 
         assertNull(resultado);
-    }
-
-    @Test
-    public void given_domainComPecasEServicos_when_converteToEntity_then_mapeiaTodasAsColecoes() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        os.setPecas(null);
-        os.setServicos(null);
-
-        var resultado = OrdemDeServicoGatewayImpl.toEntity(os);
-
-        assertNotNull(resultado);
-        assertNull(resultado.getPecas());
-        assertNull(resultado.getServicos());
-    }
-
-    @Test
-    public void given_domainSemPecas_when_converteToEntity_then_pecasRetornaNulo() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
-        os.setPecas(null);
-
-        var resultado = OrdemDeServicoGatewayImpl.toEntity(os);
-
-        assertNotNull(resultado);
-        assertNull(resultado.getPecas());
-    }
-
-    @Test
-    public void given_domainSemServicos_when_converteToEntity_then_servicosRetornaNulo() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
-        os.setServicos(null);
-
-        var resultado = OrdemDeServicoGatewayImpl.toEntity(os);
-
-        assertNotNull(resultado);
-        assertNull(resultado.getServicos());
     }
 
     @Test
