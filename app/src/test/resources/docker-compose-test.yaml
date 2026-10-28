@@ -7,3 +7,17 @@ services:
       POSTGRES_DB: tech_challenge
     ports:
       - "5434:5432"
+
+  localstack-test:
+    image: localstack/localstack:4.9
+    environment:
+      SERVICES: sns,sqs
+    ports:
+      - "4567:4566"
+    volumes:
+      - ../../../../localstack/init/ready.d:/etc/localstack/init/ready.d
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s localhost:4566/_localstack/init/ready | grep -q '\"completed\": *true'"]
+      interval: 3s
+      timeout: 5s
+      retries: 30

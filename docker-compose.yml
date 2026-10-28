@@ -16,6 +16,21 @@ services:
       timeout: 5s
       retries: 5
 
+  localstack:
+    image: localstack/localstack:4.9
+    container_name: tech_challenge_localstack
+    environment:
+      SERVICES: sns,sqs
+    ports:
+      - "4566:4566"
+    volumes:
+      - ./localstack/init/ready.d:/etc/localstack/init/ready.d
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s localhost:4566/_localstack/init/ready | grep -q '\"completed\": *true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   sonarqube:
     image: sonarqube:community
     container_name: tech_challenge_sonarqube
@@ -43,8 +58,14 @@ services:
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       SPRING_FLYWAY_ENABLED: "true"
       JWT_SECRET: minha-chave-secreta-dev-minimo-32-chars!!
+      SPRING_CLOUD_AWS_SNS_ENDPOINT: http://localstack:4566
+      SPRING_CLOUD_AWS_SQS_ENDPOINT: http://localstack:4566
+      SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
+      SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
     depends_on:
       db:
+        condition: service_healthy
+      localstack:
         condition: service_healthy
 
 volumes:

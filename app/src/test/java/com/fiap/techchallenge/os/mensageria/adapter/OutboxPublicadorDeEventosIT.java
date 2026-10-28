@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -24,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 // Sem @Transactional na classe: as transações são controladas pelo teste para provar o rollback.
 @SpringBootTest
 @ActiveProfiles("test")
+@TestPropertySource(properties = "os.outbox.relay.habilitado=false") // o relay não pode consumir os eventos pendentes durante o teste
 class OutboxPublicadorDeEventosIT {
 
     @Autowired

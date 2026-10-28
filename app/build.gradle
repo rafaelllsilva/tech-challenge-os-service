@@ -23,6 +23,12 @@ jar {
 	enabled = false
 }
 
+dependencyManagement {
+	imports {
+		mavenBom 'io.awspring.cloud:spring-cloud-aws-dependencies:4.0.2'
+	}
+}
+
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
@@ -48,6 +54,11 @@ dependencies {
 	// Flyway
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	implementation 'org.flywaydb:flyway-database-postgresql'
+
+	// Mensageria (SNS/SQS)
+	implementation 'io.awspring.cloud:spring-cloud-aws-starter-sns'
+	implementation 'io.awspring.cloud:spring-cloud-aws-starter-sqs'
+	testImplementation 'org.awaitility:awaitility'
 
 	// JWT
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
