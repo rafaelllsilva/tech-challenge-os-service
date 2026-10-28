@@ -7,6 +7,10 @@ import com.fiap.techchallenge.os.exception.BadRequestException;
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
+import com.fiap.techchallenge.os.mensageria.contrato.EventEnvelope;
+import com.fiap.techchallenge.os.mensageria.contrato.TipoEvento;
+import com.fiap.techchallenge.os.mensageria.contrato.payload.OsCriadaPayload;
+import com.fiap.techchallenge.os.mensageria.usecase.PublicadorDeEventos;
 import com.fiap.techchallenge.os.veiculo.domain.Veiculo;
 import com.fiap.techchallenge.os.veiculo.usecase.VeiculoGateway;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +37,7 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
     private final VeiculoGateway veiculoGateway;
     private final HistoricoStatusOrdemDeServicoGateway historicoStatusOrdemDeServicoGateway;
     private final OrdemDeServicoEventLogger loggerEventos;
+    private final PublicadorDeEventos publicadorDeEventos;
     private final Clock clock;
 
     @Autowired
@@ -40,12 +45,13 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
             OrdemDeServicoGateway osGateway,
             ClienteGateway clienteGateway, VeiculoGateway veiculoGateway,
             HistoricoStatusOrdemDeServicoGateway historicoStatusOrdemDeServicoGateway,
-            OrdemDeServicoEventLogger loggerEventos, Clock clock) {
+            OrdemDeServicoEventLogger loggerEventos, PublicadorDeEventos publicadorDeEventos, Clock clock) {
         this.osGateway = osGateway;
         this.clienteGateway = clienteGateway;
         this.veiculoGateway = veiculoGateway;
         this.historicoStatusOrdemDeServicoGateway = historicoStatusOrdemDeServicoGateway;
         this.loggerEventos = loggerEventos;
+        this.publicadorDeEventos = publicadorDeEventos;
         this.clock = clock;
     }
 
@@ -99,6 +105,11 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
 
             novaOs = this.osGateway.saveOrdemDeServico(novaOs);
             historicoStatusOrdemDeServicoGateway.registrarStatus(novaOs.getId(), StatusOrdemDeServico.RECEBIDA, ocorreuEm);
+
+            String osId = String.valueOf(novaOs.getId());
+            publicadorDeEventos.publicar(EventEnvelope.novo(TipoEvento.OS_CRIADA, osId,
+                    new OsCriadaPayload(osId, String.valueOf(cOpt.get().getId()), String.valueOf(vOpt.get().getId()),
+                            novaOs.getSolicitacao(), ocorreuEm), clock));
 
             loggerEventos.registrarOrdemCriada(novaOs.getId(), novaOs.getStatus(), ocorreuEm);
             return novaOs;

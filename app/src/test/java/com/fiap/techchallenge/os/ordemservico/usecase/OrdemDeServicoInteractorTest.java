@@ -9,7 +9,12 @@ import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
 import com.fiap.techchallenge.os.exception.BadRequestException;
+import com.fiap.techchallenge.os.mensageria.contrato.EventEnvelope;
+import com.fiap.techchallenge.os.mensageria.contrato.TipoEvento;
+import com.fiap.techchallenge.os.mensageria.contrato.payload.OsCriadaPayload;
+import com.fiap.techchallenge.os.mensageria.usecase.PublicadorDeEventos;
 import com.fiap.techchallenge.os.veiculo.domain.Veiculo;
+import org.mockito.ArgumentCaptor;
 import com.fiap.techchallenge.os.veiculo.usecase.VeiculoGateway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +50,9 @@ public class OrdemDeServicoInteractorTest {
 
     @Mock
     private OrdemDeServicoEventLogger eventLogger;
+
+    @Mock
+    private PublicadorDeEventos publicadorDeEventos;
 
     @Mock
     private HistoricoStatusOrdemDeServicoGateway historicoStatusOrdemDeServicoGateway;
@@ -198,6 +206,15 @@ public class OrdemDeServicoInteractorTest {
         assertEquals("Problema nos freios.", resultado.getSolicitacao());
         verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.RECEBIDA, Instant.parse("2026-08-29T12:00:00Z"));
         verify(eventLogger).registrarOrdemCriada(1L, StatusOrdemDeServico.RECEBIDA, Instant.parse("2026-08-29T12:00:00Z"));
+
+        ArgumentCaptor<EventEnvelope<?>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
+        verify(publicadorDeEventos).publicar(captor.capture());
+        EventEnvelope<?> evento = captor.getValue();
+        assertEquals(TipoEvento.OS_CRIADA, evento.type());
+        assertEquals("1", evento.correlationId());
+        assertEquals(Instant.parse("2026-08-29T12:00:00Z"), evento.occurredAt());
+        assertEquals(new OsCriadaPayload("1", "456", "123", "Problema nos freios.", Instant.parse("2026-08-29T12:00:00Z")),
+                evento.payload());
     }
 
     @Test
@@ -211,6 +228,7 @@ public class OrdemDeServicoInteractorTest {
 
         assertThrows(BadRequestException.class, () -> osUseCase.createOrdemDeServico(request.getSolicitacao(), request.getIdCliente(), request.getIdVeiculo()));
         verify(osGateway, never()).saveOrdemDeServico(any());
+        verifyNoInteractions(publicadorDeEventos);
         verify(eventLogger).registrarFalhaProcessamento(null, "creation", "BUSINESS_RULE_VIOLATION", Instant.parse("2026-08-29T12:00:00Z"), false);
     }
 

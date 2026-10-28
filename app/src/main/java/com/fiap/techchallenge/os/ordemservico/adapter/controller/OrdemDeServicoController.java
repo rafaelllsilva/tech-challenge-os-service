@@ -109,7 +109,7 @@ public class OrdemDeServicoController {
     }
 
     @PostMapping
-    @Operation(summary = "Criar ordem de serviço", description = "Cadastra uma nova ordem de serviço vinculada a um cliente e veículo")
+    @Operation(summary = "Criar ordem de serviço", description = "Cadastra uma nova ordem de serviço vinculada a um cliente e veículo e publica o evento OS_CRIADA (via outbox, na mesma transação) para iniciar a saga")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Ordem de serviço criada com sucesso",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
