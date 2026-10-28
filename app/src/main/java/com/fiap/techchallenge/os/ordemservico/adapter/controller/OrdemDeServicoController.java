@@ -146,89 +146,47 @@ public class OrdemDeServicoController {
     }
 
     // ###########################################################################################
-    // # Comandos do Mecanico
+    // # Comandos da saga
     // ###########################################################################################
-    @PostMapping("transicao/paraDiagnostico/{id}")
-    @Operation(summary = "Webhook para iniciar diagnóstico", description = "Endpoint chamado por sistema externo para notificar que a diagnóstico deve ser iniciado")
+    @PostMapping("{id}/aprovacao")
+    @Operation(summary = "Aprovar ou rejeitar o orçamento",
+            description = "Registra a decisão do cliente sobre o orçamento. Aprovado: a OS vai para AGUARDANDO_PAGAMENTO e o evento ORCAMENTO_APROVADO é publicado. Rejeitado: a OS é CANCELADA e o evento ORCAMENTO_REJEITADO é publicado. Exige o header X-Webhook-Secret.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Transição realizada com sucesso",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = TransicaoDeStatusDTO.class))),
+            @ApiResponse(responseCode = "200", description = "Decisão registrada com sucesso",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
             @ApiResponse(responseCode = "400", description = "Transição de status inválida para o estado atual", content = @Content),
-            @ApiResponse(responseCode = "401", description = "Segredo do webhook ausente ou inválido", content = @Content)
+            @ApiResponse(responseCode = "401", description = "Segredo do webhook ausente ou inválido", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Ordem de serviço não encontrada", content = @Content)
     })
-    public ResponseEntity<TransicaoDeStatusDTO> webhookParaDiagnostico(@PathVariable Long id,
+    public ResponseEntity<OrdemDeServicoResponse> aprovacaoDoOrcamento(@PathVariable Long id,
+                                                                       @RequestBody @Valid AprovacaoOrcamentoRequest request,
                                                                        @RequestHeader(value = "X-Webhook-Secret", required = false) String secret) {
         validarSegredoDoWebhook(secret);
-        var resultado = this.osUseCase.mudarParaStatus(id, StatusOrdemDeServico.EM_DIAGNOSTICO.toString());
-        return resultado.isSucesso() ? ResponseEntity.ok(resultado) : ResponseEntity.badRequest().body(resultado);
+        var os = request.getAprovado()
+                ? this.osUseCase.aprovarOrcamento(id)
+                : this.osUseCase.rejeitarOrcamento(id, request.getMotivo());
+        return ResponseEntity.ok(osMapper.toResponse(os));
     }
 
-    @PostMapping("transicao/paraAprovacao/{id}")
-    @Operation(summary = "Webhook para enviar para aprovação", description = "Endpoint chamado por sistema externo para notificar que a OS deve ser enviada para aprovação")
+    @PostMapping("{id}/cancelar")
+    @Operation(summary = "Cancelar ordem de serviço",
+            description = "Cancela a OS (permitido em RECEBIDA, EM_DIAGNOSTICO, AGUARDANDO_APROVACAO e AGUARDANDO_PAGAMENTO) e publica o evento OS_CANCELADA. Restrito a ATENDENTE e GERENTE.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Transição realizada com sucesso",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = TransicaoDeStatusDTO.class))),
-            @ApiResponse(responseCode = "400", description = "Transição de status inválida para o estado atual", content = @Content),
-            @ApiResponse(responseCode = "401", description = "Segredo do webhook ausente ou inválido", content = @Content)
+            @ApiResponse(responseCode = "200", description = "Ordem de serviço cancelada",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Cancelamento não permitido no status atual", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Ordem de serviço não encontrada", content = @Content)
     })
-    public ResponseEntity<TransicaoDeStatusDTO> webhookParaAprovacao(@PathVariable Long id,
-                                                                     @RequestHeader(value = "X-Webhook-Secret", required = false) String secret) {
-        validarSegredoDoWebhook(secret);
-        var resultado = this.osUseCase.mudarParaStatus(id, StatusOrdemDeServico.AGUARDANDO_APROVACAO.toString());
-        return resultado.isSucesso() ? ResponseEntity.ok(resultado) : ResponseEntity.badRequest().body(resultado);
-    }
-
-    @PostMapping("transicao/paraAprovacaoOuRejeicaoCliente/{id}")
-    @Operation(summary = "Webhook de aprovação/recusa do orçamento", description = "Endpoint chamado por sistema externo para informar a decisão do cliente sobre o orçamento (aprovado ou reprovado)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Transição realizada com sucesso",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = TransicaoDeStatusDTO.class))),
-            @ApiResponse(responseCode = "400", description = "Transição de status inválida para o estado atual", content = @Content),
-            @ApiResponse(responseCode = "401", description = "Segredo do webhook ausente ou inválido", content = @Content)
-    })
-    public ResponseEntity<TransicaoDeStatusDTO> webhookParaAprovacaoOuRejeicaoCliente(@PathVariable Long id,
-                                                                        @RequestBody @Valid WebhookAprovacaoRequest request,
-                                                                        @RequestHeader(value = "X-Webhook-Secret", required = false) String secret) {
-        validarSegredoDoWebhook(secret);
-        var novoStatus = request.getAprovado() ? StatusOrdemDeServico.AGUARDANDO_PAGAMENTO : StatusOrdemDeServico.CANCELADA;
-        var resultado = this.osUseCase.mudarParaStatus(id, novoStatus.toString());
-        return resultado.isSucesso() ? ResponseEntity.ok(resultado) : ResponseEntity.badRequest().body(resultado);
+    public ResponseEntity<OrdemDeServicoResponse> cancelarOrdemDeServico(@PathVariable Long id,
+                                                                         @RequestBody @Valid CancelamentoOrdemDeServicoRequest request) {
+        var os = this.osUseCase.cancelarOrdemDeServico(id, request.getMotivo());
+        return ResponseEntity.ok(osMapper.toResponse(os));
     }
 
     private void validarSegredoDoWebhook(String secret) {
         if (secret == null || !secret.equals(webhookSecret)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Segredo do webhook inválido.");
         }
-    }
-
-    @PostMapping("transicao/paraEmExecucao/{id}")
-    @Operation(summary = "Webhook para iniciar execução", description = "Endpoint chamado por sistema externo para notificar que a execução deve ser iniciada")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Transição realizada com sucesso",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = TransicaoDeStatusDTO.class))),
-            @ApiResponse(responseCode = "400", description = "Transição de status inválida para o estado atual", content = @Content),
-            @ApiResponse(responseCode = "401", description = "Segredo do webhook ausente ou inválido", content = @Content)
-    })
-    public ResponseEntity<TransicaoDeStatusDTO> webhookParaEmExecucao(@PathVariable Long id,
-                                                                      @RequestHeader(value = "X-Webhook-Secret", required = false) String secret) {
-        validarSegredoDoWebhook(secret);
-        var resultado = this.osUseCase.mudarParaStatus(id, StatusOrdemDeServico.EM_EXECUCAO.toString());
-        return resultado.isSucesso() ? ResponseEntity.ok(resultado) : ResponseEntity.badRequest().body(resultado);
-    }
-
-    @PostMapping("transicao/paraFinalizada/{id}")
-    @Operation(summary = "Webhook para finalizar execução", description = "Endpoint chamado por sistema externo para notificar que a execução deve ser finalizada")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Transição realizada com sucesso",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = TransicaoDeStatusDTO.class))),
-            @ApiResponse(responseCode = "400", description = "Transição de status inválida para o estado atual", content = @Content),
-            @ApiResponse(responseCode = "401", description = "Segredo do webhook ausente ou inválido", content = @Content)
-    })
-    public ResponseEntity<TransicaoDeStatusDTO> webhookParaFinalizada(@PathVariable Long id,
-                                                                      @RequestHeader(value = "X-Webhook-Secret", required = false) String secret) {
-        validarSegredoDoWebhook(secret);
-        var resultado = this.osUseCase.mudarParaStatus(id, StatusOrdemDeServico.FINALIZADA.toString());
-        return resultado.isSucesso() ? ResponseEntity.ok(resultado) : ResponseEntity.badRequest().body(resultado);
     }
 
     @PostMapping("transicao/paraEntregue/{id}")
@@ -242,7 +200,7 @@ public class OrdemDeServicoController {
     public ResponseEntity<TransicaoDeStatusDTO> webhookParaEntregue(@PathVariable Long id,
                                                                     @RequestHeader(value = "X-Webhook-Secret", required = false) String secret) {
         validarSegredoDoWebhook(secret);
-        var resultado = this.osUseCase.mudarParaStatus(id, StatusOrdemDeServico.ENTREGUE.toString());
+        var resultado = this.osUseCase.entregar(id);
         return resultado.isSucesso() ? ResponseEntity.ok(resultado) : ResponseEntity.badRequest().body(resultado);
     }
 

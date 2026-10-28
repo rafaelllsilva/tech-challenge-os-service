@@ -87,22 +87,8 @@ public class SecurityConfig {
 
                         // Webhooks (deve vir antes das regras genéricas de ordemDeServico)
                         .requestMatchers(HttpMethod.POST,
-                                "/api/ordemDeServico/transicao/paraDiagnostico/**",
-                                "/api/ordemDeServico/transicao/paraAprovacao/**",
-                                "/api/ordemDeServico/transicao/paraAprovacaoOuRejeicaoCliente/**",
-                                "/api/ordemDeServico/transicao/paraEmExecucao/**",
-                                "/api/ordemDeServico/transicao/paraFinalizada/**",
+                                "/api/ordemDeServico/*/aprovacao",
                                 "/api/ordemDeServico/transicao/paraEntregue/**").permitAll()
-
-                        // MECANICO
-                        .requestMatchers(HttpMethod.PUT,
-                                "/api/ordemDeServico/adicionarServicos/**",
-                                "/api/ordemDeServico/adicionarPecas/**")
-                        .hasAnyRole("MECANICO", "GERENTE")
-                        .requestMatchers(HttpMethod.DELETE,
-                                "/api/ordemDeServico/removerServicos/**",
-                                "/api/ordemDeServico/removerPecas/**")
-                        .hasAnyRole("MECANICO", "GERENTE")
 
                         // ATENDENTE
                         .requestMatchers("/api/cliente/**").hasAnyRole("ATENDENTE", "GERENTE")

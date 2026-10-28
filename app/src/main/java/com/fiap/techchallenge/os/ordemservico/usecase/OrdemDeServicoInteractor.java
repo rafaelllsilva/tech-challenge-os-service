@@ -4,11 +4,14 @@ import com.fiap.techchallenge.os.cliente.domain.Cliente;
 import com.fiap.techchallenge.os.cliente.usecase.ClienteGateway;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.TransicaoDeStatusDTO;
 import com.fiap.techchallenge.os.exception.BadRequestException;
+import com.fiap.techchallenge.os.exception.NotFoundException;
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
 import com.fiap.techchallenge.os.mensageria.contrato.EventEnvelope;
 import com.fiap.techchallenge.os.mensageria.contrato.TipoEvento;
+import com.fiap.techchallenge.os.mensageria.contrato.payload.OrcamentoAprovadoPayload;
+import com.fiap.techchallenge.os.mensageria.contrato.payload.OrcamentoRejeitadoPayload;
 import com.fiap.techchallenge.os.mensageria.contrato.payload.OsCanceladaPayload;
 import com.fiap.techchallenge.os.mensageria.contrato.payload.OsCriadaPayload;
 import com.fiap.techchallenge.os.mensageria.usecase.PublicadorDeEventos;
@@ -168,41 +171,61 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
 
     @Override
     @Transactional
-    public TransicaoDeStatusDTO mudarParaStatus(Long id, String novoStatus) {
-        try {
-            OrdemDeServico os = this.osGateway.findOrdemDeServicoById(id).orElse(null);
-            StatusOrdemDeServico novoStatusEnum = StatusOrdemDeServico.valueOf(novoStatus);
+    public OrdemDeServico aprovarOrcamento(Long id) {
+        OrdemDeServico os = buscarOuFalhar(id);
+        aplicarTransicao(os, os::aprovarOrcamento);
+        String osId = String.valueOf(os.getId());
+        publicadorDeEventos.publicar(EventEnvelope.novo(TipoEvento.ORCAMENTO_APROVADO, osId,
+                new OrcamentoAprovadoPayload(osId, os.getOrcamentoId()), clock));
+        return os;
+    }
 
-            if (os != null) {
-                OrdemDeServico.ValidacaoTransicaoDeStatus validacao = os.podeTransicionarParaStatus(novoStatusEnum);
-                if (validacao.permitida()) {
-                    StatusOrdemDeServico statusAnterior = os.getStatus();
-                    Instant ocorreuEm = clock.instant();
-                    long duracaoNoStatusAtual = calcularDuracaoNoStatusAtual(id, ocorreuEm);
-                    os.setStatus(novoStatusEnum);
-                    this.osGateway.updateOrdemDeServico(os);
-                    historicoStatusOrdemDeServicoGateway.registrarStatus(id, novoStatusEnum, ocorreuEm);
-                    TransicaoDeStatusDTO resultado = executarOperacoesParaTransicao(os, novoStatusEnum);
-                    loggerEventos.registrarStatusAlterado(os.getId(), statusAnterior, novoStatusEnum, duracaoNoStatusAtual, ocorreuEm);
-                    return resultado;
-                }
+    @Override
+    @Transactional
+    public OrdemDeServico rejeitarOrcamento(Long id, String motivo) {
+        OrdemDeServico os = buscarOuFalhar(id);
+        aplicarTransicao(os, os::rejeitarOrcamento);
+        String osId = String.valueOf(os.getId());
+        publicadorDeEventos.publicar(EventEnvelope.novo(TipoEvento.ORCAMENTO_REJEITADO, osId,
+                new OrcamentoRejeitadoPayload(osId, os.getOrcamentoId(), motivo), clock));
+        return os;
+    }
 
-                if (os.getStatus().equals(novoStatusEnum)) {
-                    String erro = "Erro: A Ordem de Serviço %d já está no status '%s'!".formatted(os.getId(), novoStatusEnum);
-                    loggerEventos.registrarFalhaProcessamento(id, "status_transition", "STATUS_ALREADY_SET", clock.instant(), false);
-                    return new TransicaoDeStatusDTO(false, erro);
-                }
+    @Override
+    @Transactional
+    public OrdemDeServico cancelarOrdemDeServico(Long id, String motivo) {
+        OrdemDeServico os = buscarOuFalhar(id);
+        StatusOrdemDeServico statusAnterior = os.getStatus();
+        aplicarTransicao(os, os::cancelar);
+        String osId = String.valueOf(os.getId());
+        publicadorDeEventos.publicar(EventEnvelope.novo(TipoEvento.OS_CANCELADA, osId,
+                new OsCanceladaPayload(osId, motivo, statusAnterior.name()), clock));
+        return os;
+    }
 
-                loggerEventos.registrarFalhaProcessamento(id, "status_transition", "INVALID_STATUS_TRANSITION", clock.instant(), false);
-                return new TransicaoDeStatusDTO(false, validacao.erroDeValidacao());
-            }
-
-            loggerEventos.registrarFalhaProcessamento(id, "status_transition", "ORDER_NOT_FOUND", clock.instant(), false);
+    @Override
+    @Transactional
+    public TransicaoDeStatusDTO entregar(Long id) {
+        Optional<OrdemDeServico> osOpt = this.osGateway.findOrdemDeServicoById(id);
+        if (osOpt.isEmpty()) {
+            loggerEventos.registrarFalhaProcessamento(id, "delivery", "ORDER_NOT_FOUND", clock.instant(), false);
             return new TransicaoDeStatusDTO(false, getMensagemOsNaoExiste(id));
-        } catch (RuntimeException ex) {
-            loggerEventos.registrarFalhaProcessamento(id, "status_transition", "UNEXPECTED_ERROR", clock.instant(), true);
-            throw ex;
         }
+        OrdemDeServico os = osOpt.get();
+        try {
+            aplicarTransicao(os, os::entregar);
+        } catch (BadRequestException ex) {
+            loggerEventos.registrarFalhaProcessamento(id, "delivery", "INVALID_STATUS_TRANSITION", clock.instant(), false);
+            return new TransicaoDeStatusDTO(false, ex.getMessage());
+        }
+        return new TransicaoDeStatusDTO(true, "A Ordem de Serviço %d mudou para '%s'".formatted(id, os.getStatus()));
+    }
+
+    private OrdemDeServico buscarOuFalhar(Long id) {
+        return this.osGateway.findOrdemDeServicoById(id).orElseThrow(() -> {
+            loggerEventos.registrarFalhaProcessamento(id, "command", "ORDER_NOT_FOUND", clock.instant(), false);
+            return new NotFoundException(getMensagemOsNaoExiste(id));
+        });
     }
 
     // ###########################################################################################
@@ -303,31 +326,6 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
         this.osGateway.updateOrdemDeServico(os);
         historicoStatusOrdemDeServicoGateway.registrarStatus(os.getId(), os.getStatus(), ocorreuEm);
         loggerEventos.registrarStatusAlterado(os.getId(), statusAnterior, os.getStatus(), duracaoNoStatusAtual, ocorreuEm);
-    }
-
-    private TransicaoDeStatusDTO executarOperacoesParaTransicao(OrdemDeServico os, StatusOrdemDeServico novoStatus) {
-        var mensagem = "A Ordem de Serviço %d mudou para '%s'".formatted(os.getId(), novoStatus);
-        var dto = TransicaoDeStatusDTO.builder().sucesso(true).build();
-
-        switch (os.getStatus()) {
-            case AGUARDANDO_APROVACAO -> dto.setMensagem(enviarEmailDeSoliciatacaoDeAprovacao(os));
-            case AGUARDANDO_PAGAMENTO -> dto.setMensagem(receberEmailComAprovacao(os));
-            default -> dto.setMensagem(mensagem);
-        };
-
-        return dto;
-    }
-
-    private String enviarEmailDeSoliciatacaoDeAprovacao(OrdemDeServico os) {
-        return "Email de aprovação foi enviado para o cliente %s no endereço %s.".formatted(os.getCliente().getNome(), os.getCliente().getEmail());
-    }
-
-    private String receberEmailComAprovacao(OrdemDeServico os) {
-        return "Email com a aprovação do cliente %s recebido!".formatted(os.getCliente().getNome());
-    }
-
-    private String receberEmailComReprovacao(OrdemDeServico os) {
-        return "Email com a recusa de aprovação do cliente %s recebido!".formatted(os.getCliente().getNome());
     }
 
     private String getMensagemOsNaoExiste(Long id) {

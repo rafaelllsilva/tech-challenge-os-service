@@ -9,6 +9,9 @@ import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
 import com.fiap.techchallenge.os.exception.BadRequestException;
+import com.fiap.techchallenge.os.exception.NotFoundException;
+import com.fiap.techchallenge.os.mensageria.contrato.payload.OrcamentoAprovadoPayload;
+import com.fiap.techchallenge.os.mensageria.contrato.payload.OrcamentoRejeitadoPayload;
 import com.fiap.techchallenge.os.mensageria.contrato.EventEnvelope;
 import com.fiap.techchallenge.os.mensageria.contrato.TipoEvento;
 import com.fiap.techchallenge.os.mensageria.contrato.payload.OsCanceladaPayload;
@@ -332,106 +335,137 @@ public class OrdemDeServicoInteractorTest {
         verify(osGateway, never()).deleteOrdemDeServico(any());
     }
 
-    // #################### mudarParaStatus(Long id, StatusOrdemDeServico novoStatus) ####################
+    // #################### Comandos: aprovação, cancelamento e entrega ####################
 
     @Test
-    public void given_transicaoPermitida_when_mudaParaStatus_then_retornaSucesso() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
-
-        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.CANCELADA.toString());
-
-        assertTrue(resultado.isSucesso());
-        assertTrue(resultado.getMensagem().contains("CANCELADA"));
-        verify(osGateway).updateOrdemDeServico(any());
-        verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.CANCELADA, Instant.parse("2026-08-29T12:00:00Z"));
-        verify(eventLogger).registrarStatusAlterado(1L, StatusOrdemDeServico.RECEBIDA, StatusOrdemDeServico.CANCELADA,
-                3_600_000L, Instant.parse("2026-08-29T12:00:00Z"));
-    }
-
-    @Test
-    public void given_transicaoParaAguardandoAprovacao_when_mudaParaStatus_then_retornaSucessoComEmailEnviado() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
-
-        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.AGUARDANDO_APROVACAO.toString());
-
-        assertTrue(resultado.isSucesso());
-        assertTrue(resultado.getMensagem().contains("Email de aprovação foi enviado"));
-    }
-
-    @Test
-    public void given_transicaoParaAguardandoPagamento_when_mudaParaStatus_then_retornaSucessoComEmailRecebido() {
+    public void given_aguardandoAprovacao_when_aprovarOrcamento_then_aguardandoPagamentoEPublicaOrcamentoAprovado() {
         var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_APROVACAO);
+        os.setOrcamentoId("orc-1");
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
 
-        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.AGUARDANDO_PAGAMENTO.toString());
+        var resultado = osUseCase.aprovarOrcamento(1L);
 
-        assertTrue(resultado.isSucesso());
-        assertTrue(resultado.getMensagem().contains("Email com a aprovação"));
+        assertEquals(StatusOrdemDeServico.AGUARDANDO_PAGAMENTO, resultado.getStatus());
+        verify(osGateway).updateOrdemDeServico(os);
+        verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.AGUARDANDO_PAGAMENTO, AGORA);
+        verify(eventLogger).registrarStatusAlterado(1L, StatusOrdemDeServico.AGUARDANDO_APROVACAO,
+                StatusOrdemDeServico.AGUARDANDO_PAGAMENTO, 3_600_000L, AGORA);
+        ArgumentCaptor<EventEnvelope<?>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
+        verify(publicadorDeEventos).publicar(captor.capture());
+        assertEquals(TipoEvento.ORCAMENTO_APROVADO, captor.getValue().type());
+        assertEquals("1", captor.getValue().correlationId());
+        assertEquals(new OrcamentoAprovadoPayload("1", "orc-1"), captor.getValue().payload());
     }
 
     @Test
-    public void given_transicaoParaEmExecucao_when_mudaParaStatus_then_retornaSucessoComMensagemGenerica() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.APROVADA);
+    public void given_osRecebida_when_aprovarOrcamento_then_jogaBadRequestESemPublicar() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
+        os.setOrcamentoId("orc-1");
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
 
-        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.EM_EXECUCAO.toString());
-
-        assertTrue(resultado.isSucesso());
-        assertTrue(resultado.getMensagem().contains("mudou para 'EM_EXECUCAO'"));
+        assertThrows(BadRequestException.class, () -> osUseCase.aprovarOrcamento(1L));
+        verify(osGateway, never()).updateOrdemDeServico(any());
+        verifyNoInteractions(publicadorDeEventos);
     }
 
     @Test
-    public void given_transicaoParaFinalizada_when_mudaParaStatus_then_retornaSucessoComMensagemGenerica() {
+    public void given_osInexistente_when_comandos_then_jogaNotFound() {
+        when(osGateway.findOrdemDeServicoById(9L)).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> osUseCase.aprovarOrcamento(9L));
+        assertThrows(NotFoundException.class, () -> osUseCase.rejeitarOrcamento(9L, "x"));
+        assertThrows(NotFoundException.class, () -> osUseCase.cancelarOrdemDeServico(9L, "x"));
+        verifyNoInteractions(publicadorDeEventos);
+    }
+
+    @Test
+    public void given_aguardandoAprovacao_when_rejeitarOrcamento_then_canceladaEPublicaOrcamentoRejeitado() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_APROVACAO);
+        os.setOrcamentoId("orc-1");
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        var resultado = osUseCase.rejeitarOrcamento(1L, "muito caro");
+
+        assertEquals(StatusOrdemDeServico.CANCELADA, resultado.getStatus());
+        verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.CANCELADA, AGORA);
+        ArgumentCaptor<EventEnvelope<?>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
+        verify(publicadorDeEventos).publicar(captor.capture());
+        assertEquals(TipoEvento.ORCAMENTO_REJEITADO, captor.getValue().type());
+        assertEquals(new OrcamentoRejeitadoPayload("1", "orc-1", "muito caro"), captor.getValue().payload());
+    }
+
+    @Test
+    public void given_osEmExecucao_when_rejeitarOrcamento_then_jogaBadRequest() {
         var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_EXECUCAO);
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-        when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
 
-        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.FINALIZADA.toString());
+        assertThrows(BadRequestException.class, () -> osUseCase.rejeitarOrcamento(1L, "x"));
+        verifyNoInteractions(publicadorDeEventos);
+    }
+
+    @Test
+    public void given_statusCancelavel_when_cancelar_then_canceladaEPublicaOsCanceladaComStatusAnterior() {
+        for (var status : List.of(StatusOrdemDeServico.RECEBIDA, StatusOrdemDeServico.AGUARDANDO_APROVACAO,
+                StatusOrdemDeServico.AGUARDANDO_PAGAMENTO)) {
+            reset(publicadorDeEventos);
+            var os = criarOrdemDeServico(1L, status);
+            when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+            var resultado = osUseCase.cancelarOrdemDeServico(1L, "desistiu");
+
+            assertEquals(StatusOrdemDeServico.CANCELADA, resultado.getStatus());
+            ArgumentCaptor<EventEnvelope<?>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
+            verify(publicadorDeEventos).publicar(captor.capture());
+            assertEquals(TipoEvento.OS_CANCELADA, captor.getValue().type());
+            assertEquals(new OsCanceladaPayload("1", "desistiu", status.name()), captor.getValue().payload());
+        }
+    }
+
+    @Test
+    public void given_statusNaoCancelavel_when_cancelar_then_jogaBadRequestESemPublicar() {
+        for (var status : List.of(StatusOrdemDeServico.APROVADA, StatusOrdemDeServico.EM_EXECUCAO,
+                StatusOrdemDeServico.FINALIZADA, StatusOrdemDeServico.ENTREGUE, StatusOrdemDeServico.CANCELADA)) {
+            var os = criarOrdemDeServico(1L, status);
+            when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+            assertThrows(BadRequestException.class, () -> osUseCase.cancelarOrdemDeServico(1L, "x"));
+        }
+        verifyNoInteractions(publicadorDeEventos);
+        verify(osGateway, never()).updateOrdemDeServico(any());
+    }
+
+    @Test
+    public void given_osFinalizada_when_entregar_then_entregue() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.FINALIZADA);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        var resultado = osUseCase.entregar(1L);
 
         assertTrue(resultado.isSucesso());
-        assertTrue(resultado.getMensagem().contains("mudou para 'FINALIZADA'"));
+        assertTrue(resultado.getMensagem().contains("ENTREGUE"));
+        verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.ENTREGUE, AGORA);
     }
 
     @Test
-    public void given_transicaoNaoPermitida_when_mudaParaStatus_then_retornaErro() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
+    public void given_osNaoFinalizada_when_entregar_then_retornaFalha() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_EXECUCAO);
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
 
-        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.APROVADA.toString());
+        var resultado = osUseCase.entregar(1L);
 
         assertFalse(resultado.isSucesso());
         verify(osGateway, never()).updateOrdemDeServico(any());
-        verify(eventLogger).registrarFalhaProcessamento(1L, "status_transition", "INVALID_STATUS_TRANSITION", Instant.parse("2026-08-29T12:00:00Z"), false);
+        verify(eventLogger).registrarFalhaProcessamento(1L, "delivery", "INVALID_STATUS_TRANSITION", AGORA, false);
     }
 
     @Test
-    public void given_ordemJaNoStatus_when_mudaParaStatus_then_retornaErro() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_DIAGNOSTICO);
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+    public void given_osInexistente_when_entregar_then_retornaFalha() {
+        when(osGateway.findOrdemDeServicoById(9L)).thenReturn(Optional.empty());
 
-        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.EM_DIAGNOSTICO.toString());
-
-        assertFalse(resultado.isSucesso());
-        assertTrue(resultado.getMensagem().contains("já está no status"));
-        verify(osGateway, never()).updateOrdemDeServico(any());
-    }
-
-    @Test
-    public void given_ordemNaoEncontrada_when_mudaParaStatus_then_retornaErro() {
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.empty());
-
-        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.EM_DIAGNOSTICO.toString());
+        var resultado = osUseCase.entregar(9L);
 
         assertFalse(resultado.isSucesso());
-        assertTrue(resultado.getMensagem().contains("não existe"));
-        verify(osGateway, never()).updateOrdemDeServico(any());
-        verify(eventLogger).registrarFalhaProcessamento(1L, "status_transition", "ORDER_NOT_FOUND", Instant.parse("2026-08-29T12:00:00Z"), false);
+        verify(eventLogger).registrarFalhaProcessamento(9L, "delivery", "ORDER_NOT_FOUND", AGORA, false);
     }
 
     // #################### Saga: eventos do billing ####################

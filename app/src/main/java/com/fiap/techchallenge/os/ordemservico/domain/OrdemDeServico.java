@@ -157,7 +157,7 @@ public class OrdemDeServico {
 
     public void aprovarOrcamento() {
         if (this.orcamentoId == null) {
-            throw new IllegalStateException("Erro: A Ordem de Serviço %d não possui orçamento registrado!".formatted(this.id));
+            throw new BadRequestException("Erro: A Ordem de Serviço %d não possui orçamento registrado!".formatted(this.id));
         }
         transicionarPara(StatusOrdemDeServico.AGUARDANDO_PAGAMENTO);
     }

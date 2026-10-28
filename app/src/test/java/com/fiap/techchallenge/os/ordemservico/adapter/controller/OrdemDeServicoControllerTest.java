@@ -1,6 +1,8 @@
 package com.fiap.techchallenge.os.ordemservico.adapter.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fiap.techchallenge.os.exception.BadRequestException;
+import com.fiap.techchallenge.os.exception.NotFoundException;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.*;
 import com.fiap.techchallenge.os.ordemservico.adapter.presenter.OrdemDeServicoMapper;
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
@@ -216,32 +218,147 @@ public class OrdemDeServicoControllerTest {
                 .andExpect(status().isNotFound());
     }
 
-    // POST transicao/paraDiagnostico/{id}
+    // POST {id}/aprovacao
+
+    private static final String SEGREDO = "webhook-secret-key-123";
 
     @Test
-    public void given_transicaoPermitida_when_notificaMecanicoParaDiagnostico_then_retornaSucesso() throws Exception {
-        var url = CONTROLLER_PATH + "transicao/paraDiagnostico/{id}";
+    public void given_aprovado_when_aprovacao_then_chamaAprovarOrcamentoERetorna200() throws Exception {
+        var os = criarOrdemDeServico(1L);
+        when(osUseCase.aprovarOrcamento(1L)).thenReturn(os);
+        when(osMapper.toResponse(any())).thenReturn(converterEmResponse(os));
 
-        when(osUseCase.mudarParaStatus(any(), eq(StatusOrdemDeServico.EM_DIAGNOSTICO.toString())))
-                .thenReturn(new TransicaoDeStatusDTO(true, "Mudou para EM_DIAGNOSTICO"));
+        mockMvc.perform(post(CONTROLLER_PATH + "{id}/aprovacao", 1L)
+                        .header("X-Webhook-Secret", SEGREDO)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"aprovado\": true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1L));
 
-        mockMvc.perform(post(url, 1L)
-                .header("X-Webhook-Secret", "webhook-secret-key-123")
-                .contentType(MediaType.APPLICATION_JSON))
+        verify(osUseCase).aprovarOrcamento(1L);
+    }
+
+    @Test
+    public void given_rejeitado_when_aprovacao_then_chamaRejeitarOrcamentoComMotivo() throws Exception {
+        var os = criarOrdemDeServico(1L);
+        when(osUseCase.rejeitarOrcamento(1L, "caro")).thenReturn(os);
+        when(osMapper.toResponse(any())).thenReturn(converterEmResponse(os));
+
+        mockMvc.perform(post(CONTROLLER_PATH + "{id}/aprovacao", 1L)
+                        .header("X-Webhook-Secret", SEGREDO)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"aprovado\": false, \"motivo\": \"caro\"}"))
+                .andExpect(status().isOk());
+
+        verify(osUseCase).rejeitarOrcamento(1L, "caro");
+    }
+
+    @Test
+    public void given_segredoInvalido_when_aprovacao_then_retorna401() throws Exception {
+        mockMvc.perform(post(CONTROLLER_PATH + "{id}/aprovacao", 1L)
+                        .header("X-Webhook-Secret", "errado")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"aprovado\": true}"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post(CONTROLLER_PATH + "{id}/aprovacao", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"aprovado\": true}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(osUseCase);
+    }
+
+    @Test
+    public void given_transicaoInvalida_when_aprovacao_then_retorna400() throws Exception {
+        when(osUseCase.aprovarOrcamento(1L)).thenThrow(new BadRequestException("transição inválida"));
+
+        mockMvc.perform(post(CONTROLLER_PATH + "{id}/aprovacao", 1L)
+                        .header("X-Webhook-Secret", SEGREDO)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"aprovado\": true}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void given_osInexistente_when_aprovacao_then_retorna404() throws Exception {
+        when(osUseCase.aprovarOrcamento(9L)).thenThrow(new NotFoundException("não existe"));
+
+        mockMvc.perform(post(CONTROLLER_PATH + "{id}/aprovacao", 9L)
+                        .header("X-Webhook-Secret", SEGREDO)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"aprovado\": true}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    public void given_semCampoAprovado_when_aprovacao_then_retorna400() throws Exception {
+        mockMvc.perform(post(CONTROLLER_PATH + "{id}/aprovacao", 1L)
+                        .header("X-Webhook-Secret", SEGREDO)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    // POST {id}/cancelar
+
+    @Test
+    public void given_motivo_when_cancelar_then_chamaUseCaseERetorna200() throws Exception {
+        var os = criarOrdemDeServico(1L);
+        when(osUseCase.cancelarOrdemDeServico(1L, "desistiu")).thenReturn(os);
+        when(osMapper.toResponse(any())).thenReturn(converterEmResponse(os));
+
+        mockMvc.perform(post(CONTROLLER_PATH + "{id}/cancelar", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\": \"desistiu\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1L));
+    }
+
+    @Test
+    public void given_cancelamentoNaoPermitido_when_cancelar_then_retorna400() throws Exception {
+        when(osUseCase.cancelarOrdemDeServico(1L, "x")).thenThrow(new BadRequestException("não pode"));
+
+        mockMvc.perform(post(CONTROLLER_PATH + "{id}/cancelar", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\": \"x\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void given_osInexistente_when_cancelar_then_retorna404() throws Exception {
+        when(osUseCase.cancelarOrdemDeServico(9L, "x")).thenThrow(new NotFoundException("não existe"));
+
+        mockMvc.perform(post(CONTROLLER_PATH + "{id}/cancelar", 9L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\": \"x\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    public void given_motivoVazio_when_cancelar_then_retorna400() throws Exception {
+        mockMvc.perform(post(CONTROLLER_PATH + "{id}/cancelar", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\": \"\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    // POST transicao/paraEntregue/{id}
+
+    @Test
+    public void given_transicaoPermitida_when_entregue_then_retornaSucesso() throws Exception {
+        when(osUseCase.entregar(1L)).thenReturn(new TransicaoDeStatusDTO(true, "Mudou para ENTREGUE"));
+
+        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEntregue/{id}", 1L)
+                        .header("X-Webhook-Secret", SEGREDO))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sucesso").value(true));
     }
 
     @Test
-    public void given_transicaoNaoPermitida_when_notificaMecanicoParaDiagnostico_then_retornaBadRequest() throws Exception {
-        var url = CONTROLLER_PATH + "transicao/paraDiagnostico/{id}";
+    public void given_transicaoNaoPermitida_when_entregue_then_retornaBadRequest() throws Exception {
+        when(osUseCase.entregar(1L)).thenReturn(new TransicaoDeStatusDTO(false, "Erro: transição não permitida"));
 
-        when(osUseCase.mudarParaStatus(any(), eq(StatusOrdemDeServico.EM_DIAGNOSTICO.toString())))
-                .thenReturn(new TransicaoDeStatusDTO(false, "Erro: transição não permitida"));
-
-        mockMvc.perform(post(url, 1L)
-                .header("X-Webhook-Secret", "webhook-secret-key-123")
-                .contentType(MediaType.APPLICATION_JSON))
+        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEntregue/{id}", 1L)
+                        .header("X-Webhook-Secret", SEGREDO))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.sucesso").value(false));
     }

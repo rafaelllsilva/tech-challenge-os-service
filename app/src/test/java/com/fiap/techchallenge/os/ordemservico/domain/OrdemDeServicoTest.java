@@ -195,9 +195,9 @@ public class OrdemDeServicoTest {
     }
 
     @Test
-    public void given_semOrcamentoId_when_aprovarOrcamento_then_illegalState() {
+    public void given_semOrcamentoId_when_aprovarOrcamento_then_badRequest() {
         var os = osCom(AGUARDANDO_APROVACAO);
-        assertThrows(IllegalStateException.class, os::aprovarOrcamento);
+        assertThrows(BadRequestException.class, os::aprovarOrcamento);
     }
 
     private static Stream<Arguments> metodosEStatusInvalidos() {

@@ -2,6 +2,8 @@ package com.fiap.techchallenge.os.ordemservico.adapter.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fiap.techchallenge.os.mensageria.framework.persistence.OutboxEventoEntity;
+import com.fiap.techchallenge.os.mensageria.framework.persistence.OutboxEventoRepository;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.OrdemDeServicoResponse;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.CreateOrdemDeServicoRequest;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.UpdateOrdemDeServicoRequest;
@@ -19,6 +21,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -35,6 +38,9 @@ public class OrdemDeServicoApiIT {
 
     @Autowired
     private OrdemDeServicoGateway osGateway;
+
+    @Autowired
+    private OutboxEventoRepository outboxRepository;
 
     private static ObjectMapper objectMapper;
 
@@ -258,366 +264,160 @@ public class OrdemDeServicoApiIT {
                 .andExpect(status().isBadRequest());
     }
 
-    @Test
-    public void given_osRecebida_when_notificarMecanicoParaDiagnostico_then_retorna400() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
+    private static final String SEGREDO = "webhook-secret-key-123";
 
+    private Long criarOs(String solicitacao) throws Exception {
         CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS para diagnóstico");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
+        request.setSolicitacao(solicitacao);
+        request.setIdCliente(getClienteId());
+        request.setIdVeiculo(getVeiculo());
 
         MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.sucesso").value(false));
+        return getIdDeOrdemDeServicoCriada(resultado);
     }
 
-    @Test
-    public void given_transicaoInvalida_when_notificarMecanicoParaDiagnostico_then_retorna400() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
-
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS para diagnóstico inválido");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Força o status EM_DIAGNOSTICO (dado legado)
-        forcarStatus(osId, StatusOrdemDeServico.EM_DIAGNOSTICO);
-
-        // Tenta mudar para EM_DIAGNOSTICO novamente (já está neste status)
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.sucesso").value(false));
-    }
-
-    @Test
-    public void given_osEmDiagnosticoComOrcamento_when_enviarParaAprovacaoDoCliente_then_retorna200() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
-
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS para aprovação");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Registra o orçamento da OS
+    private Long criarOsAguardandoAprovacao(String solicitacao) throws Exception {
+        Long osId = criarOs(solicitacao);
         definirOrcamento(osId, BigDecimal.valueOf(300.00));
-
-        // Agora envia para aprovação
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.sucesso").value(true));
-    }
-
-    @Test
-    public void given_osAguardandoAprovacao_when_enviarParaAprovacaoDoCliente_then_retorna400() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
-
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS já aguardando aprovação");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
         forcarStatus(osId, StatusOrdemDeServico.AGUARDANDO_APROVACAO);
-
-        // Tenta enviar para aprovação novamente
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.sucesso").value(false));
+        return osId;
     }
 
+    private List<OutboxEventoEntity> eventosDaOs(Long osId) {
+        return outboxRepository.findAll().stream()
+                .filter(e -> String.valueOf(osId).equals(e.getCorrelationId()))
+                .toList();
+    }
+
+    // POST {id}/aprovacao
+
     @Test
-    public void given_osAprovada_when_iniciarExecucaoDaOrdemDeServico_then_retorna200() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
+    public void given_osAguardandoAprovacao_when_aprovacaoAprovada_then_aguardandoPagamentoEPublicaEvento() throws Exception {
+        Long osId = criarOsAguardandoAprovacao("OS para aprovar");
 
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS para execução");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Registra o orçamento da OS
-        definirOrcamento(osId, BigDecimal.valueOf(300.00));
-
-        // Envia para aprovação
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Aprova
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacaoOuRejeicaoCliente/" + osId)
-                        .header("X-Webhook-Secret", "webhook-secret-key-123")
+        mockMvc.perform(post(CONTROLLER_PATH + osId + "/aprovacao")
+                        .header("X-Webhook-Secret", SEGREDO)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(aprovacaoClienteBody))
-                .andExpect(status().isOk());
-
-        // Inicia execução
-        // O pagamento é confirmado pelo billing-service (evento); aqui o status é forçado
-        forcarStatus(osId, StatusOrdemDeServico.APROVADA);
-
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEmExecucao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.sucesso").value(true));
+                .andExpect(jsonPath("$.status").value("AGUARDANDO_PAGAMENTO"));
+
+        assertThat(osGateway.findOrdemDeServicoById(osId).orElseThrow().getStatus())
+                .isEqualTo(StatusOrdemDeServico.AGUARDANDO_PAGAMENTO);
+        assertThat(eventosDaOs(osId)).extracting(OutboxEventoEntity::getTipo)
+                .containsExactlyInAnyOrder("OS_CRIADA", "ORCAMENTO_APROVADO");
+        assertThat(eventosDaOs(osId).stream().filter(e -> e.getTipo().equals("ORCAMENTO_APROVADO")).findFirst().orElseThrow()
+                .getTopico()).isEqualTo("os-events");
     }
 
     @Test
-    public void given_osNaoAprovada_when_iniciarExecucaoDaOrdemDeServico_then_retorna400() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
+    public void given_osAguardandoAprovacao_when_aprovacaoRejeitada_then_canceladaEPublicaEvento() throws Exception {
+        Long osId = criarOsAguardandoAprovacao("OS para rejeitar");
 
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS não aprovada");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
+        mockMvc.perform(post(CONTROLLER_PATH + osId + "/aprovacao")
+                        .header("X-Webhook-Secret", SEGREDO)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
+                        .content("{\"aprovado\": false, \"motivo\": \"muito caro\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADA"));
 
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Tenta iniciar execução sem estar aprovada
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEmExecucao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.sucesso").value(false));
+        var evento = eventosDaOs(osId).stream().filter(e -> e.getTipo().equals("ORCAMENTO_REJEITADO")).findFirst().orElseThrow();
+        assertThat(evento.getPayload()).contains("muito caro");
     }
 
     @Test
-    public void given_osEmExecucao_when_finalizarExecucaoDaOrdemDeServico_then_retorna200() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
+    public void given_osRecebida_when_aprovacao_then_retorna400SemEvento() throws Exception {
+        Long osId = criarOs("OS sem orçamento");
 
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS para finalizar");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Registra o orçamento da OS
-        definirOrcamento(osId, BigDecimal.valueOf(300.00));
-
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacaoOuRejeicaoCliente/" + osId)
-                        .header("X-Webhook-Secret", "webhook-secret-key-123")
+        mockMvc.perform(post(CONTROLLER_PATH + osId + "/aprovacao")
+                        .header("X-Webhook-Secret", SEGREDO)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(aprovacaoClienteBody))
-                .andExpect(status().isOk());
+                .andExpect(status().isBadRequest());
 
-        // O pagamento é confirmado pelo billing-service (evento); aqui o status é forçado
-        forcarStatus(osId, StatusOrdemDeServico.APROVADA);
-
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEmExecucao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Finaliza execução
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraFinalizada/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.sucesso").value(true));
+        assertThat(eventosDaOs(osId)).extracting(OutboxEventoEntity::getTipo).containsExactly("OS_CRIADA");
     }
 
     @Test
-    public void given_osNaoEmExecucao_when_finalizarExecucaoDaOrdemDeServico_then_retorna400() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
+    public void given_segredoInvalido_when_aprovacao_then_retorna401() throws Exception {
+        Long osId = criarOsAguardandoAprovacao("OS segredo");
 
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS não em execução");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
+        mockMvc.perform(post(CONTROLLER_PATH + osId + "/aprovacao")
+                        .header("X-Webhook-Secret", "errado")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Tenta finalizar sem estar em execução
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraFinalizada/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.sucesso").value(false));
+                        .content(aprovacaoClienteBody))
+                .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    public void given_osInexistente_when_aprovacao_then_retorna404() throws Exception {
+        mockMvc.perform(post(CONTROLLER_PATH + "999999/aprovacao")
+                        .header("X-Webhook-Secret", SEGREDO)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(aprovacaoClienteBody))
+                .andExpect(status().isNotFound());
+    }
+
+    // POST {id}/cancelar
+
+    @Test
+    public void given_osRecebida_when_cancelar_then_canceladaEPublicaOsCancelada() throws Exception {
+        Long osId = criarOs("OS para cancelar");
+
+        mockMvc.perform(post(CONTROLLER_PATH + osId + "/cancelar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\": \"cliente desistiu\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADA"));
+
+        var evento = eventosDaOs(osId).stream().filter(e -> e.getTipo().equals("OS_CANCELADA")).findFirst().orElseThrow();
+        assertThat(evento.getPayload()).contains("cliente desistiu").contains("RECEBIDA");
+    }
+
+    @Test
+    public void given_osAprovada_when_cancelar_then_retorna400SemEvento() throws Exception {
+        Long osId = criarOs("OS aprovada");
+        forcarStatus(osId, StatusOrdemDeServico.APROVADA);
+
+        mockMvc.perform(post(CONTROLLER_PATH + osId + "/cancelar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\": \"x\"}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(eventosDaOs(osId)).extracting(OutboxEventoEntity::getTipo).containsExactly("OS_CRIADA");
+    }
+
+    @Test
+    public void given_osInexistente_when_cancelar_then_retorna404() throws Exception {
+        mockMvc.perform(post(CONTROLLER_PATH + "999999/cancelar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\": \"x\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    // POST transicao/paraEntregue/{id}
 
     @Test
     public void given_osFinalizada_when_entregarOrdemDeServico_then_retorna200() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
+        Long osId = criarOs("OS para entregar");
+        forcarStatus(osId, StatusOrdemDeServico.FINALIZADA);
 
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS para entregar");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Registra o orçamento da OS
-        definirOrcamento(osId, BigDecimal.valueOf(300.00));
-
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId)
-                .header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacaoOuRejeicaoCliente/" + osId)
-                        .header("X-Webhook-Secret", "webhook-secret-key-123")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(aprovacaoClienteBody))
-                .andExpect(status().isOk());
-
-        // O pagamento é confirmado pelo billing-service (evento); aqui o status é forçado
-        forcarStatus(osId, StatusOrdemDeServico.APROVADA);
-
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEmExecucao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraFinalizada/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Entrega a OS
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEntregue/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
+        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEntregue/" + osId).header("X-Webhook-Secret", SEGREDO))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sucesso").value(true));
+
+        assertThat(osGateway.findOrdemDeServicoById(osId).orElseThrow().getStatus()).isEqualTo(StatusOrdemDeServico.ENTREGUE);
     }
 
     @Test
     public void given_osNaoFinalizada_when_entregarOrdemDeServico_then_retorna400() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
+        Long osId = criarOs("OS não finalizada");
 
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS não finalizada");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Tenta entregar sem estar finalizada
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEntregue/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.sucesso").value(false));
-    }
-
-    @Test
-    public void given_osAguardandoAprovacao_when_aprovarOrdemDeServico_then_retorna200() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
-
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS para aprovar");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Registra o orçamento da OS
-        definirOrcamento(osId, BigDecimal.valueOf(300.00));
-
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Aprova a OS
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacaoOuRejeicaoCliente/" + osId)
-                        .header("X-Webhook-Secret", "webhook-secret-key-123")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(aprovacaoClienteBody))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.sucesso").value(true));
-    }
-
-    @Test
-    public void given_osNaoAguardandoAprovacao_when_aprovarOrdemDeServico_then_retorna400() throws Exception {
-        Long clienteId = getClienteId();
-        Long veiculoId = getVeiculo();
-
-        CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS não aguardando aprovação");
-        request.setIdCliente(clienteId);
-        request.setIdVeiculo(veiculoId);
-
-        MvcResult resultado = mockMvc.perform(post(CONTROLLER_PATH)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        Long osId = getIdDeOrdemDeServicoCriada(resultado);
-
-        // Tenta aprovar sem estar em AGUARDANDO_APROVACAO
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacaoOuRejeicaoCliente/" + osId)
-                        .header("X-Webhook-Secret", "webhook-secret-key-123")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(aprovacaoClienteBody))
+        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEntregue/" + osId).header("X-Webhook-Secret", SEGREDO))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.sucesso").value(false));
     }

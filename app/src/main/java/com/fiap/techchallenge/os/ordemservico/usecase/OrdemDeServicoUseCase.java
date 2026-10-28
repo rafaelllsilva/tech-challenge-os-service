@@ -22,7 +22,16 @@ public interface OrdemDeServicoUseCase {
 
     OrdemDeServico deleteOrdemDeServico(Long id);
 
-    TransicaoDeStatusDTO mudarParaStatus(Long id, String novoStatus);
+    /** Cliente aprova o orçamento: AGUARDANDO_PAGAMENTO e publica ORCAMENTO_APROVADO. */
+    OrdemDeServico aprovarOrcamento(Long id);
+
+    /** Cliente rejeita o orçamento: CANCELADA e publica ORCAMENTO_REJEITADO. */
+    OrdemDeServico rejeitarOrcamento(Long id, String motivo);
+
+    /** Cancela a OS e publica OS_CANCELADA. */
+    OrdemDeServico cancelarOrdemDeServico(Long id, String motivo);
+
+    TransicaoDeStatusDTO entregar(Long id);
 
     // Reações aos eventos do billing (saga). OS inexistente é logada e ignorada.
 
