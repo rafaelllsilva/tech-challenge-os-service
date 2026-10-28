@@ -11,6 +11,7 @@ import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEven
 import com.fiap.techchallenge.os.exception.BadRequestException;
 import com.fiap.techchallenge.os.mensageria.contrato.EventEnvelope;
 import com.fiap.techchallenge.os.mensageria.contrato.TipoEvento;
+import com.fiap.techchallenge.os.mensageria.contrato.payload.OsCanceladaPayload;
 import com.fiap.techchallenge.os.mensageria.contrato.payload.OsCriadaPayload;
 import com.fiap.techchallenge.os.mensageria.usecase.PublicadorDeEventos;
 import com.fiap.techchallenge.os.veiculo.domain.Veiculo;
@@ -431,5 +432,148 @@ public class OrdemDeServicoInteractorTest {
         assertTrue(resultado.getMensagem().contains("não existe"));
         verify(osGateway, never()).updateOrdemDeServico(any());
         verify(eventLogger).registrarFalhaProcessamento(1L, "status_transition", "ORDER_NOT_FOUND", Instant.parse("2026-08-29T12:00:00Z"), false);
+    }
+
+    // #################### Saga: eventos do billing ####################
+
+    private static final Instant AGORA = Instant.parse("2026-08-29T12:00:00Z");
+
+    @Test
+    public void given_osRecebida_when_orcamentoGerado_then_aguardandoAprovacaoComOrcamento() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        osUseCase.aplicarOrcamentoGerado(1L, "orc-1", new BigDecimal("350.00"));
+
+        assertEquals(StatusOrdemDeServico.AGUARDANDO_APROVACAO, os.getStatus());
+        assertEquals("orc-1", os.getOrcamentoId());
+        assertEquals(new BigDecimal("350.00"), os.getValorTotal());
+        verify(osGateway).updateOrdemDeServico(os);
+        verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.AGUARDANDO_APROVACAO, AGORA);
+        verify(eventLogger).registrarStatusAlterado(eq(1L), eq(StatusOrdemDeServico.RECEBIDA),
+                eq(StatusOrdemDeServico.AGUARDANDO_APROVACAO), anyLong(), eq(AGORA));
+    }
+
+    @Test
+    public void given_osJaAprovada_when_orcamentoGerado_then_jogaBadRequestENaoPersiste() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.APROVADA);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        assertThrows(BadRequestException.class, () -> osUseCase.aplicarOrcamentoGerado(1L, "orc-1", BigDecimal.TEN));
+        verify(osGateway, never()).updateOrdemDeServico(any());
+        verifyNoInteractions(publicadorDeEventos);
+    }
+
+    @Test
+    public void given_osInexistente_when_eventoDoBilling_then_logaEIgnora() {
+        when(osGateway.findOrdemDeServicoById(9L)).thenReturn(Optional.empty());
+
+        osUseCase.aplicarOrcamentoGerado(9L, "orc-1", BigDecimal.TEN);
+        osUseCase.aplicarOrcamentoRejeitadoPeloBilling(9L);
+        osUseCase.aplicarPagamentoConfirmado(9L);
+        osUseCase.aplicarPagamentoFalhou(9L, 3);
+        osUseCase.aplicarPagamentoEstornado(9L);
+
+        verify(osGateway, never()).updateOrdemDeServico(any());
+        verify(eventLogger, times(5)).registrarFalhaProcessamento(9L, "saga_event", "ORDER_NOT_FOUND", AGORA, false);
+    }
+
+    @Test
+    public void given_aguardandoAprovacao_when_orcamentoRejeitadoPeloBilling_then_cancelada() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_APROVACAO);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        osUseCase.aplicarOrcamentoRejeitadoPeloBilling(1L);
+
+        assertEquals(StatusOrdemDeServico.CANCELADA, os.getStatus());
+        verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.CANCELADA, AGORA);
+    }
+
+    @Test
+    public void given_osJaCancelada_when_orcamentoRejeitadoPeloBilling_then_ignora() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.CANCELADA);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        osUseCase.aplicarOrcamentoRejeitadoPeloBilling(1L);
+
+        verify(osGateway, never()).updateOrdemDeServico(any());
+        verify(historicoStatusOrdemDeServicoGateway, never()).registrarStatus(anyLong(), any(), any());
+    }
+
+    @Test
+    public void given_osEmExecucao_when_orcamentoRejeitadoPeloBilling_then_jogaBadRequest() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_EXECUCAO);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        assertThrows(BadRequestException.class, () -> osUseCase.aplicarOrcamentoRejeitadoPeloBilling(1L));
+    }
+
+    @Test
+    public void given_aguardandoPagamento_when_pagamentoConfirmado_then_aprovadaEZeraTentativas() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_PAGAMENTO);
+        os.setTentativasPagamento(2);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        osUseCase.aplicarPagamentoConfirmado(1L);
+
+        assertEquals(StatusOrdemDeServico.APROVADA, os.getStatus());
+        assertEquals(0, os.getTentativasPagamento());
+        verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.APROVADA, AGORA);
+    }
+
+    @Test
+    public void given_osCancelada_when_pagamentoConfirmado_then_jogaBadRequest() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.CANCELADA);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        assertThrows(BadRequestException.class, () -> osUseCase.aplicarPagamentoConfirmado(1L));
+    }
+
+    @Test
+    public void given_falhaAbaixoDoLimite_when_pagamentoFalhou_then_voltaParaAprovacaoSemPublicar() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_PAGAMENTO);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        osUseCase.aplicarPagamentoFalhou(1L, 3);
+
+        assertEquals(StatusOrdemDeServico.AGUARDANDO_APROVACAO, os.getStatus());
+        assertEquals(1, os.getTentativasPagamento());
+        verifyNoInteractions(publicadorDeEventos);
+    }
+
+    @Test
+    public void given_falhaNoLimite_when_pagamentoFalhou_then_canceladaEPublicaOsCancelada() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_PAGAMENTO);
+        os.setTentativasPagamento(2);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        osUseCase.aplicarPagamentoFalhou(1L, 3);
+
+        assertEquals(StatusOrdemDeServico.CANCELADA, os.getStatus());
+        ArgumentCaptor<EventEnvelope<?>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
+        verify(publicadorDeEventos).publicar(captor.capture());
+        assertEquals(TipoEvento.OS_CANCELADA, captor.getValue().type());
+        assertEquals("1", captor.getValue().correlationId());
+        assertEquals(new OsCanceladaPayload("1", "PAGAMENTO_RECUSADO", "AGUARDANDO_PAGAMENTO"), captor.getValue().payload());
+    }
+
+    @Test
+    public void given_osForaDeAguardandoPagamento_when_pagamentoFalhou_then_jogaBadRequestESemPublicar() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        assertThrows(BadRequestException.class, () -> osUseCase.aplicarPagamentoFalhou(1L, 3));
+        verifyNoInteractions(publicadorDeEventos);
+    }
+
+    @Test
+    public void given_osCancelada_when_pagamentoEstornado_then_naoMudaStatus() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.CANCELADA);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        osUseCase.aplicarPagamentoEstornado(1L);
+
+        assertEquals(StatusOrdemDeServico.CANCELADA, os.getStatus());
+        verify(osGateway, never()).updateOrdemDeServico(any());
     }
 }

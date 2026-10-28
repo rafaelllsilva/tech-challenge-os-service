@@ -9,6 +9,7 @@ import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
 import com.fiap.techchallenge.os.mensageria.contrato.EventEnvelope;
 import com.fiap.techchallenge.os.mensageria.contrato.TipoEvento;
+import com.fiap.techchallenge.os.mensageria.contrato.payload.OsCanceladaPayload;
 import com.fiap.techchallenge.os.mensageria.contrato.payload.OsCriadaPayload;
 import com.fiap.techchallenge.os.mensageria.usecase.PublicadorDeEventos;
 import com.fiap.techchallenge.os.veiculo.domain.Veiculo;
@@ -30,6 +31,7 @@ import java.util.*;
 @Slf4j
 public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
 
+    private static final String MOTIVO_PAGAMENTO_RECUSADO = "PAGAMENTO_RECUSADO";
     private static final String OS_NAO_EXISTE_MSG_TEMPLATE = "Erro: Ordem de Serviço '%d' não existe!";
 
     private final OrdemDeServicoGateway osGateway;
@@ -201,6 +203,76 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
             loggerEventos.registrarFalhaProcessamento(id, "status_transition", "UNEXPECTED_ERROR", clock.instant(), true);
             throw ex;
         }
+    }
+
+    // ###########################################################################################
+    // # Saga: eventos do billing
+    // ###########################################################################################
+
+    @Override
+    @Transactional
+    public void aplicarOrcamentoGerado(Long id, String orcamentoId, BigDecimal valorTotal) {
+        buscarParaSaga(id).ifPresent(os ->
+                aplicarTransicao(os, () -> os.registrarOrcamento(orcamentoId, valorTotal)));
+    }
+
+    @Override
+    @Transactional
+    public void aplicarOrcamentoRejeitadoPeloBilling(Long id) {
+        buscarParaSaga(id).ifPresent(os -> {
+            if (StatusOrdemDeServico.CANCELADA.equals(os.getStatus())) {
+                log.info("Ordem de Serviço {} já está CANCELADA, ignorando ORCAMENTO_REJEITADO do billing", id);
+                return;
+            }
+            aplicarTransicao(os, os::rejeitarOrcamento);
+        });
+    }
+
+    @Override
+    @Transactional
+    public void aplicarPagamentoConfirmado(Long id) {
+        buscarParaSaga(id).ifPresent(os -> aplicarTransicao(os, os::confirmarPagamento));
+    }
+
+    @Override
+    @Transactional
+    public void aplicarPagamentoFalhou(Long id, int maxTentativas) {
+        buscarParaSaga(id).ifPresent(os -> {
+            StatusOrdemDeServico statusAnterior = os.getStatus();
+            aplicarTransicao(os, () -> os.registrarFalhaPagamento(maxTentativas));
+            if (StatusOrdemDeServico.CANCELADA.equals(os.getStatus())) {
+                String osId = String.valueOf(os.getId());
+                publicadorDeEventos.publicar(EventEnvelope.novo(TipoEvento.OS_CANCELADA, osId,
+                        new OsCanceladaPayload(osId, MOTIVO_PAGAMENTO_RECUSADO, statusAnterior.name()), clock));
+            }
+        });
+    }
+
+    @Override
+    @Transactional
+    public void aplicarPagamentoEstornado(Long id) {
+        // A OS já foi cancelada por EXECUCAO_FALHOU: o estorno só fica registrado em evento_processado.
+        buscarParaSaga(id).ifPresent(os ->
+                log.info("Pagamento da Ordem de Serviço {} estornado (status atual '{}')", id, os.getStatus()));
+    }
+
+    private Optional<OrdemDeServico> buscarParaSaga(Long id) {
+        Optional<OrdemDeServico> os = this.osGateway.findOrdemDeServicoById(id);
+        if (os.isEmpty()) {
+            log.error(getMensagemOsNaoExiste(id));
+            loggerEventos.registrarFalhaProcessamento(id, "saga_event", "ORDER_NOT_FOUND", clock.instant(), false);
+        }
+        return os;
+    }
+
+    private void aplicarTransicao(OrdemDeServico os, Runnable acao) {
+        StatusOrdemDeServico statusAnterior = os.getStatus();
+        acao.run();
+        Instant ocorreuEm = clock.instant();
+        long duracaoNoStatusAtual = calcularDuracaoNoStatusAtual(os.getId(), ocorreuEm);
+        this.osGateway.updateOrdemDeServico(os);
+        historicoStatusOrdemDeServicoGateway.registrarStatus(os.getId(), os.getStatus(), ocorreuEm);
+        loggerEventos.registrarStatusAlterado(os.getId(), statusAnterior, os.getStatus(), duracaoNoStatusAtual, ocorreuEm);
     }
 
     private TransicaoDeStatusDTO executarOperacoesParaTransicao(OrdemDeServico os, StatusOrdemDeServico novoStatus) {

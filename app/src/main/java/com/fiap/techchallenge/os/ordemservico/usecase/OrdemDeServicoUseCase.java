@@ -3,6 +3,7 @@ package com.fiap.techchallenge.os.ordemservico.usecase;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.TransicaoDeStatusDTO;
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 
+import java.math.BigDecimal;
 import java.util.*;
 
 public interface OrdemDeServicoUseCase {
@@ -22,4 +23,16 @@ public interface OrdemDeServicoUseCase {
     OrdemDeServico deleteOrdemDeServico(Long id);
 
     TransicaoDeStatusDTO mudarParaStatus(Long id, String novoStatus);
+
+    // Reações aos eventos do billing (saga). OS inexistente é logada e ignorada.
+
+    void aplicarOrcamentoGerado(Long id, String orcamentoId, BigDecimal valorTotal);
+
+    void aplicarOrcamentoRejeitadoPeloBilling(Long id);
+
+    void aplicarPagamentoConfirmado(Long id);
+
+    void aplicarPagamentoFalhou(Long id, int maxTentativas);
+
+    void aplicarPagamentoEstornado(Long id);
 }

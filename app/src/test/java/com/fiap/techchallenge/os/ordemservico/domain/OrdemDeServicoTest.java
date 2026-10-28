@@ -108,8 +108,10 @@ public class OrdemDeServicoTest {
     @Test
     public void given_aguardandoPagamento_when_confirmarPagamento_then_aprovada() {
         var os = osCom(AGUARDANDO_PAGAMENTO);
+        os.setTentativasPagamento(2);
         os.confirmarPagamento();
         assertEquals(APROVADA, os.getStatus());
+        assertEquals(0, os.getTentativasPagamento());
     }
 
     @Test

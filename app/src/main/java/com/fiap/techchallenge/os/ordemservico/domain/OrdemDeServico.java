@@ -169,6 +169,7 @@ public class OrdemDeServico {
 
     public void confirmarPagamento() {
         transicionarPara(StatusOrdemDeServico.APROVADA);
+        this.tentativasPagamento = 0;
     }
 
     public void registrarFalhaPagamento(int maxTentativas) {
