@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: tech-challenge-app
+  name: os-service
   namespace: tech-challenge
 spec:
   replicas: 2
@@ -13,18 +13,21 @@ spec:
       maxSurge: 0
   selector:
     matchLabels:
-      app: tech-challenge-app
+      app: os-service
   template:
     metadata:
       labels:
-        app: tech-challenge-app
+        app: os-service
     spec:
+      # IRSA (EKS): a role vem da annotation do ServiceAccount. No AWS Academy (LabRole, sem IRSA),
+      # as credenciais vêm da role do nó e a annotation é ignorada. Veja serviceaccount.yaml.
+      serviceAccountName: os-service
       securityContext:
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
       containers:
-        - name: tech-challenge-app
+        - name: os-service
           image: "IMAGE_PLACEHOLDER"
           imagePullPolicy: Always
           securityContext:
@@ -45,43 +48,78 @@ spec:
             - name: SPRING_DATASOURCE_URL
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: os-service-secrets
                   key: SPRING_DATASOURCE_URL
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: os-service-secrets
                   key: SPRING_DATASOURCE_USERNAME
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: os-service-secrets
                   key: SPRING_DATASOURCE_PASSWORD
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: os-service-secrets
                   key: JWT_SECRET
             - name: WEBHOOK_APROVACAO_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: os-service-secrets
                   key: WEBHOOK_APROVACAO_SECRET
             - name: SPRING_FLYWAY_ENABLED
               valueFrom:
                 configMapKeyRef:
-                  name: app-config
+                  name: os-service-config
                   key: SPRING_FLYWAY_ENABLED
             - name: SPRING_FLYWAY_SCHEMAS
               valueFrom:
                 configMapKeyRef:
-                  name: app-config
+                  name: os-service-config
                   key: SPRING_FLYWAY_SCHEMAS
             - name: SWAGGER_BASE_PATH
               valueFrom:
                 configMapKeyRef:
-                  name: app-config
+                  name: os-service-config
                   key: SWAGGER_BASE_PATH
+            - name: AWS_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: os-service-config
+                  key: AWS_REGION
+            - name: OS_TOPICO_OS_EVENTS
+              valueFrom:
+                configMapKeyRef:
+                  name: os-service-config
+                  key: OS_TOPICO_OS_EVENTS
+            - name: OS_TOPICO_BILLING_EVENTS
+              valueFrom:
+                configMapKeyRef:
+                  name: os-service-config
+                  key: OS_TOPICO_BILLING_EVENTS
+            - name: OS_TOPICO_EXECUTION_EVENTS
+              valueFrom:
+                configMapKeyRef:
+                  name: os-service-config
+                  key: OS_TOPICO_EXECUTION_EVENTS
+            - name: OS_FILA_BILLING
+              valueFrom:
+                configMapKeyRef:
+                  name: os-service-config
+                  key: OS_FILA_BILLING
+            - name: OS_FILA_EXECUTION
+              valueFrom:
+                configMapKeyRef:
+                  name: os-service-config
+                  key: OS_FILA_EXECUTION
+            - name: OS_SAGA_PAGAMENTO_MAX_TENTATIVAS
+              valueFrom:
+                configMapKeyRef:
+                  name: os-service-config
+                  key: OS_SAGA_PAGAMENTO_MAX_TENTATIVAS
           startupProbe:
             httpGet:
               path: /actuator/health

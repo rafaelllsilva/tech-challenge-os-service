@@ -1,13 +1,13 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: tech-challenge-app-hpa
+  name: os-service-hpa
   namespace: tech-challenge
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: tech-challenge-app
+    name: os-service
   minReplicas: 2
   maxReplicas: 10
   metrics:

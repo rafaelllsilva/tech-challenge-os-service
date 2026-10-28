@@ -18,7 +18,7 @@ env:
   JAVA_VERSION: "21"
   CLUSTER_NAME: tech-challenge
   NAMESPACE: tech-challenge
-  ECR_REPOSITORY: tech-challenge-app
+  ECR_REPOSITORY: os-service
 
 jobs:
   deploy:
@@ -34,6 +34,9 @@ jobs:
           distribution: "corretto"
           java-version: ${{ env.JAVA_VERSION }}
           cache: "gradle"
+
+      - name: Executar Testes e Verificar Cobertura
+        run: ./gradlew :app:check --no-daemon
 
       - name: Configurar Credenciais AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -70,12 +73,19 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --name ${{ env.CLUSTER_NAME }}
 
-      - name: Aplicar ConfigMap
-        run: kubectl apply -f k8s/configmap.yaml
+      - name: Resolver Conta AWS nos Manifestos
+        run: |
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          sed -i "s|AWS_ACCOUNT_ID_PLACEHOLDER|${ACCOUNT_ID}|g" k8s/configmap.yaml k8s/serviceaccount.yaml
+
+      - name: Aplicar ConfigMap e ServiceAccount
+        run: |
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/serviceaccount.yaml
 
       - name: Criar ou Atualizar Secrets no Kubernetes
         run: |
-          kubectl create secret generic app-secrets \
+          kubectl create secret generic os-service-secrets \
             --namespace=${{ env.NAMESPACE }} \
             --from-literal=SPRING_DATASOURCE_URL="${{ secrets.DB_URL }}" \
             --from-literal=SPRING_DATASOURCE_USERNAME="${{ secrets.DB_USER }}" \
@@ -99,25 +109,25 @@ jobs:
 
       - name: Recriar Pods em deploy manual
         if: github.event_name == 'workflow_dispatch'
-        run: kubectl rollout restart deployment/tech-challenge-app -n ${{ env.NAMESPACE }}
+        run: kubectl rollout restart deployment/os-service -n ${{ env.NAMESPACE }}
 
       - name: Verificar Rollout do Deployment
         run: |
-          if ! kubectl rollout status deployment/tech-challenge-app \
+          if ! kubectl rollout status deployment/os-service \
             -n ${{ env.NAMESPACE }} \
             --timeout=15m; then
             echo "::error::O rollout não estabilizou. Consulte HPA, Pods e eventos abaixo para identificar escala ou capacidade insuficiente."
             kubectl get hpa -n ${{ env.NAMESPACE }}
-            kubectl get deployment tech-challenge-app -n ${{ env.NAMESPACE }}
-            kubectl get pods -n ${{ env.NAMESPACE }} -l app=tech-challenge-app -o wide
+            kubectl get deployment os-service -n ${{ env.NAMESPACE }}
+            kubectl get pods -n ${{ env.NAMESPACE }} -l app=os-service -o wide
             kubectl get events -n ${{ env.NAMESPACE }} --sort-by=.lastTimestamp
             exit 1
           fi
 
       - name: Validar auto-attach do New Relic
         run: |
-          expected_init_container="nri-java--tech-challenge-app"
-          pod_names="$(kubectl get pods -n ${{ env.NAMESPACE }} -l app=tech-challenge-app -o jsonpath='{.items[*].metadata.name}')"
+          expected_init_container="nri-java--os-service"
+          pod_names="$(kubectl get pods -n ${{ env.NAMESPACE }} -l app=os-service -o jsonpath='{.items[*].metadata.name}')"
 
           if [ -z "$pod_names" ]; then
             echo "::error::Nenhum Pod da aplicação foi encontrado para validar o auto-attach do New Relic."
@@ -134,16 +144,16 @@ jobs:
                 ;;
             esac
 
-            java_tool_options="$(kubectl get pod "$pod" -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.containers[?(@.name=="tech-challenge-app")].env[?(@.name=="JAVA_TOOL_OPTIONS")].value}')"
+            java_tool_options="$(kubectl get pod "$pod" -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.containers[?(@.name=="os-service")].env[?(@.name=="JAVA_TOOL_OPTIONS")].value}')"
             case "$java_tool_options" in
-              *"-javaagent:/nri-java--tech-challenge-app/newrelic-agent.jar"*) ;;
+              *"-javaagent:/nri-java--os-service/newrelic-agent.jar"*) ;;
               *)
                 echo "::error::O Pod $pod não recebeu o JAVA_TOOL_OPTIONS do agente New Relic."
                 exit 1
                 ;;
             esac
 
-            license_key_reference="$(kubectl get pod "$pod" -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.containers[?(@.name=="tech-challenge-app")].env[?(@.name=="NEW_RELIC_LICENSE_KEY")].valueFrom.secretKeyRef.name}{" "}{.spec.containers[?(@.name=="tech-challenge-app")].env[?(@.name=="NEW_RELIC_LICENSE_KEY")].valueFrom.secretKeyRef.key}')"
+            license_key_reference="$(kubectl get pod "$pod" -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.containers[?(@.name=="os-service")].env[?(@.name=="NEW_RELIC_LICENSE_KEY")].valueFrom.secretKeyRef.name}{" "}{.spec.containers[?(@.name=="os-service")].env[?(@.name=="NEW_RELIC_LICENSE_KEY")].valueFrom.secretKeyRef.key}')"
             if [ "$license_key_reference" != "newrelic-key-secret new_relic_license_key" ]; then
               echo "::error::O Pod $pod não recebeu a referência esperada da chave New Relic."
               exit 1
@@ -154,7 +164,7 @@ jobs:
 
       - name: Gerar tráfego para validação APM
         run: |
-          kubectl port-forward -n ${{ env.NAMESPACE }} service/tech-challenge-app-service 18080:80 > /tmp/newrelic-port-forward.log 2>&1 &
+          kubectl port-forward -n ${{ env.NAMESPACE }} service/os-service-service 18080:80 > /tmp/newrelic-port-forward.log 2>&1 &
           port_forward_pid=$!
           trap 'kill "$port_forward_pid"' EXIT
 
@@ -173,7 +183,7 @@ jobs:
           echo "=========================================================="
           echo "Aguardando endpoint do LoadBalancer..."
           sleep 10
-          LB_HOSTNAME=$(kubectl get svc tech-challenge-app-service \
+          LB_HOSTNAME=$(kubectl get svc os-service-service \
             -n ${{ env.NAMESPACE }} \
             -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Pendente")
           echo "DNS do Load Balancer: http://${LB_HOSTNAME}"

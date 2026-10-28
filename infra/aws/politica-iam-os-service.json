@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicarEventosDaOs",
+      "Effect": "Allow",
+      "Action": "sns:Publish",
+      "Resource": "arn:aws:sns:us-east-1:ACCOUNT_ID:os-events"
+    },
+    {
+      "Sid": "ConsumirFilasDoOsService",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl",
+        "sqs:ChangeMessageVisibility"
+      ],
+      "Resource": [
+        "arn:aws:sqs:us-east-1:ACCOUNT_ID:os-service-billing-events",
+        "arn:aws:sqs:us-east-1:ACCOUNT_ID:os-service-execution-events"
+      ]
+    }
+  ]
+}

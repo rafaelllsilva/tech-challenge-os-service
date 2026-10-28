@@ -15,6 +15,7 @@ concurrency:
 env:
   JAVA_VERSION: "21"
 
+# Nomes dos jobs são usados como required checks (veja docs/PROTECAO-BRANCH.md): não renomeie.
 jobs:
   test:
     name: Testes e Cobertura (JaCoCo)
@@ -30,8 +31,14 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: "gradle"
 
+      # O Docker já vem no runner: os testes sobem Postgres e LocalStack pelo
+      # app/src/test/resources/docker-compose-test.yaml (spring-boot-docker-compose).
+      - name: Verificar Docker
+        run: docker version && docker compose version
+
+      # check = testes (incluindo BDD) + relatório JaCoCo + verificação de cobertura mínima.
       - name: Executar Testes e Verificar Cobertura
-        run: ./gradlew :app:test :app:jacocoTestReport :app:jacocoTestCoverageVerification --no-daemon
+        run: ./gradlew :app:check --no-daemon
 
       - name: Publicar Relatório de Testes
         if: always()
@@ -49,6 +56,33 @@ jobs:
           path: app/build/reports/jacoco/test/html
           retention-days: 7
 
+  sonar:
+    name: SonarQube Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "corretto"
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: "gradle"
+
+      # O job roda os testes de novo para gerar o XML do JaCoCo que o Sonar lê. Com
+      # sonar.qualitygate.wait=true o job (e o PR) falha se o quality gate falhar.
+      - name: Analisar com SonarQube
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: >
+          ./gradlew :app:check :app:sonar --no-daemon
+          -Dsonar.host.url="$SONAR_HOST_URL"
+          -Dsonar.qualitygate.wait=true
+
   build-check:
     name: Validar Build da Imagem Docker
     needs: test
@@ -61,4 +95,4 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Testar Build da Imagem (linux/amd64)
-        run: docker build --platform linux/amd64 -t tech-challenge-app:check -f app/Dockerfile .
+        run: docker build --platform linux/amd64 -t os-service:check -f app/Dockerfile .
