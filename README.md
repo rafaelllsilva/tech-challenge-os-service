@@ -1,347 +1,271 @@
 # tech-challenge-os-service
 
-Aplicação principal do **Tech Challenge — Fase 3**.
+**os-service** do **Tech Challenge — Fase 4** (FIAP). É o serviço core da oficina mecânica: clientes, veículos, autenticação (JWT) e ordens de serviço (OS). Participa de uma **saga coreografada** com o billing-service e o execution-service, que são repositórios externos a este.
 
-Implementa as regras de negócio do sistema de gestão de uma oficina mecânica em **Spring Boot (Java 21)**, executada como workload containerizado no **Amazon EKS**, com autenticação stateless via JWT e banco de dados relacional gerenciado no Amazon RDS PostgreSQL.
+---
+
+## Papel do os-service no sistema
+
+| Serviço | Responsabilidade | Neste repositório? |
+|---|---|---|
+| **os-service** | OS, clientes, veículos, auth; dono do status da OS | sim |
+| billing-service | Orçamento e pagamento (Mercado Pago) | não, externo |
+| execution-service | Diagnóstico, estoque e execução | não, externo |
+
+Os três se comunicam por eventos em **Amazon SNS** (tópicos) e **Amazon SQS** (filas). O os-service guarda o status da OS e reage aos eventos dos outros dois; não há chamada REST entre serviços.
+
+Contrato completo dos eventos: [`docs/CONTRATO-EVENTOS.md`](docs/CONTRATO-EVENTOS.md).
 
 ---
 
 ## Tecnologias
 
-- Java 21 (Amazon Corretto)
-- Spring Boot 4.0.5 (Spring MVC, Spring Data JPA, Spring Security, Spring Actuator)
-- PostgreSQL 16 / Flyway (13 migrations, schema `os`)
-- JWT — JJWT (`io.jsonwebtoken:jjwt`), assinatura HMAC-SHA256
-- SpringDoc OpenAPI 3 (Swagger UI)
-- Docker — multi-stage build (`linux/amd64`)
-- Kubernetes 1.36 / Amazon EKS
-- GitHub Actions (CI/CD)
-
----
-
-## Estrutura do Repositório
-
-```
-.github/workflows/
-├── pr.yml          CI: testes unitários, cobertura JaCoCo e build check da imagem Docker
-└── deploy.yml      CD: build, push ECR e deploy no EKS via kubectl
-app/
-├── src/main/java/com/fiap/techchallenge/os/
-│   ├── cliente/           domínio e endpoints de cliente
-│   ├── veiculo/           domínio e endpoints de veículo
-│   ├── ordemservico/      domínio e endpoints de ordem de serviço
-│   └── security/          filtro JWT, configuração Spring Security
-├── src/main/resources/
-│   ├── application.properties    configuração e variáveis de ambiente
-│   ├── logback-spring.xml        logs JSON em produção, colorido em dev
-│   └── db/migration/             migrations Flyway (V1 a V13)
-├── src/test/                     testes unitários e de integração (Testcontainers)
-├── build.gradle                  dependências, JaCoCo (mínimo 80%) e SonarQube
-└── Dockerfile                    multi-stage build para linux/amd64
-k8s/
-├── configmap.yaml                variáveis não-sensíveis de configuração
-├── deployment.yaml               Deployment (2 réplicas, RollingUpdate, probes, non-root)
-├── service.yaml                  Service LoadBalancer — AWS NLB, porta 80 → 8080
-├── hpa.yaml                      HPA: 2 a 10 réplicas (CPU 70%, memória 80%)
-└── pod-disruption-budget.yaml    PDB: minAvailable 1
-postman/
-├── Tech Challenge Fase 3 - Clientes.postman_collection.json
-├── Tech Challenge Fase 3 - Veiculo.postman_collection.json
-├── Tech Challenge Fase 3 - Ordem de Servico.postman_collection.json
-└── TechChallenge-Fase3.postman_environment.json
-docker-compose.yml                stack local: App + PostgreSQL 16 + SonarQube
-```
+- Java 21 (Amazon Corretto) e Spring Boot 4.0.5 (MVC, Data JPA, Security, Actuator)
+- PostgreSQL 16 e Flyway (migrations V001 a V020, schema `os`)
+- **Amazon SNS/SQS** com **Spring Cloud AWS 4.0.2**; **LocalStack 4.9** no desenvolvimento e nos testes
+- JWT (JJWT), SpringDoc OpenAPI (Swagger UI)
+- Micrometer/Prometheus e logs JSON (logstash) com `correlationId`
+- Testes: JUnit 6, Mockito, Awaitility e **Cucumber** (BDD, em português); JaCoCo (mínimo 80%) e SonarQube
+- Docker (multi-stage, `linux/amd64`), Kubernetes/Amazon EKS e GitHub Actions
 
 ---
 
 ## Arquitetura
 
+Clean Architecture por módulo (`domain` → `usecase` → `adapter` → `framework`), em `app/src/main/java/com/fiap/techchallenge/os/`:
+
 ```
-                            ┌───────────────────────────────┐
-                            │       Amazon API Gateway      │
-                            └───────────────┬───────────────┘
-                                            │
-                       ┌────────────────────┴─────────────────────┐
-                       │ POST /auth                      /{proxy+}│
-                       ▼                                          ▼
-         ┌──────────────────────────┐          ┌──────────────────────────────┐
-         │   AWS Lambda (Auth CPF)  │          │  AWS Network Load Balancer   │
-         │   - Valida CPF           │          │  - porta 80                  │
-         │   - Emite JWT            │          └──────────────┬───────────────┘
-         └──────────────────────────┘                         │
-                                                              ▼
-                                          ┌───────────────────────────────────┐
-                                          │   Amazon EKS (ns: tech-challenge) │
-                                          │                                   │
-                                          │   Pods Spring Boot                │
-                                          │   - Valida JWT                    │
-                                          │   - Regras de negócio             │
-                                          │   - Actuator / Prometheus         │
-                                          │   - Migrations Flyway             │
-                                          │                                   │
-                                          │   HPA (CPU 70% / Memória 80%)     │
-                                          └──────────────────┬────────────────┘
-                                                             │
-                                          ┌──────────────────▼────────────────┐
-                                          │  Amazon RDS PostgreSQL 16         │
-                                          │  database: techchallenge          │
-                                          │  schema:   os                     │
-                                          └───────────────────────────────────┘
+cliente/ veiculo/ usuario/     módulos de apoio (CRUD e auth)
+ordemservico/
+  domain/                      OrdemDeServico, StatusOrdemDeServico, máquina de estados
+  usecase/                     OrdemDeServicoInteractor (abrir, consultar, aplicar eventos da saga)
+  adapter/controller|gateway|messaging|presenter   REST, gateways e handlers dos eventos
+  framework/persistence/       entidades e repositórios JPA
+  observabilidade/             logs de eventos (chave-valor)
+mensageria/
+  contrato/                    envelope, tipos e payloads dos eventos
+  usecase/                     PublicadorDeEventos, ManipuladorDeEvento
+  adapter/                     outbox, relay para o SNS, consumidor SQS e despachante idempotente
+  framework/                   propriedades e persistência (outbox_evento, evento_processado)
+observabilidade/               filtro X-Correlation-Id e métricas da saga
+security/ config/ exception/
 ```
+
+### Por que Saga coreografada
+
+- O fluxo é linear e tem **poucos participantes** (3). Cada serviço reage a um evento e publica o próximo, então um orquestrador seria um componente a mais sem ganho real.
+- **Sem ponto central de falha:** se um serviço cai, os eventos esperam na fila e são processados quando ele volta. Não há orquestrador que, ao cair, pare todas as OS.
+- **Baixo acoplamento:** os serviços só conhecem o contrato dos eventos, não as APIs uns dos outros. Compensações também são eventos (`PAGAMENTO_FALHOU`, `OS_CANCELADA`, `PAGAMENTO_ESTORNADO`).
+
+**Trade-offs aceitos** e como foram mitigados:
+
+| Trade-off | Mitigação |
+|---|---|
+| O fluxo fica espalhado entre serviços e é mais difícil de acompanhar | `correlationId = osId` nos eventos, logs e métricas, e o endpoint `GET /api/ordemDeServico/{id}/historico` |
+| Publicar no broker e gravar no banco não são atômicos | **Outbox transacional:** o evento é gravado na mesma transação da OS e um relay o envia ao SNS |
+| O SQS entrega "pelo menos uma vez" (duplicatas) | **Consumidores idempotentes:** `evento_processado` deduplica por `eventId` na mesma transação do handler |
+| Mensagens que falham sempre | Reentrega pelo SQS e **DLQ** após 5 tentativas |
+| Eventos fora de ordem ou inválidos para o estado atual | Máquina de estados rejeita a transição; o erro de negócio é confirmado e contado em `os.eventos.consumidos{resultado="erro_negocio"}` |
+
+### Saga (sequência)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Cliente/Atendente
+    participant OS as os-service
+    participant B as billing-service
+    participant E as execution-service
+
+    C->>OS: POST /api/ordemDeServico
+    OS-->>B: OS_CRIADA
+    OS-->>E: OS_CRIADA
+    B-->>OS: ORCAMENTO_GERADO
+    Note over OS: AGUARDANDO_APROVACAO
+    C->>OS: POST /{id}/aprovacao (aprovado)
+    OS-->>B: ORCAMENTO_APROVADO
+    Note over OS: AGUARDANDO_PAGAMENTO
+    alt pagamento confirmado
+        B-->>OS: PAGAMENTO_CONFIRMADO
+        Note over OS: APROVADA
+        E-->>OS: EXECUCAO_INICIADA
+        E-->>OS: EXECUCAO_FINALIZADA
+        Note over OS: FINALIZADA
+        C->>OS: POST /transicao/paraEntregue/{id}
+        Note over OS: ENTREGUE
+    else pagamento falhou (limite de tentativas)
+        B-->>OS: PAGAMENTO_FALHOU
+        OS-->>B: OS_CANCELADA
+        OS-->>E: OS_CANCELADA
+    else execução falhou
+        E-->>OS: EXECUCAO_FALHOU
+        Note over OS: CANCELADA
+        B-->>OS: PAGAMENTO_ESTORNADO
+    end
+```
+
+### Máquina de estados da OS
+
+```mermaid
+stateDiagram-v2
+    [*] --> RECEBIDA
+    RECEBIDA --> AGUARDANDO_APROVACAO: ORCAMENTO_GERADO
+    EM_DIAGNOSTICO --> AGUARDANDO_APROVACAO: ORCAMENTO_GERADO
+    AGUARDANDO_APROVACAO --> AGUARDANDO_PAGAMENTO: aprovação do cliente
+    AGUARDANDO_PAGAMENTO --> APROVADA: PAGAMENTO_CONFIRMADO
+    AGUARDANDO_PAGAMENTO --> AGUARDANDO_APROVACAO: PAGAMENTO_FALHOU (abaixo do limite)
+    APROVADA --> EM_EXECUCAO: EXECUCAO_INICIADA
+    EM_EXECUCAO --> FINALIZADA: EXECUCAO_FINALIZADA
+    FINALIZADA --> ENTREGUE: entrega
+    RECEBIDA --> CANCELADA
+    EM_DIAGNOSTICO --> CANCELADA
+    AGUARDANDO_APROVACAO --> CANCELADA: rejeição ou cancelamento
+    AGUARDANDO_PAGAMENTO --> CANCELADA: limite de falhas ou cancelamento
+    APROVADA --> CANCELADA
+    EM_EXECUCAO --> CANCELADA: EXECUCAO_FALHOU
+    ENTREGUE --> [*]
+    CANCELADA --> [*]
+```
+
+O número máximo de falhas de pagamento é `os.saga.pagamento.max-tentativas` (padrão 3).
 
 ---
 
-## Pré-requisitos
+## Eventos
 
-- Java JDK 21
-- Docker
-- kubectl compatível com K8s 1.36 — necessário apenas para deploy manual
-- AWS CLI v2 — necessário apenas para deploy manual
-
-Para desenvolvimento local, somente Docker é necessário.
+| Evento | Tópico | Direção | Efeito no os-service |
+|---|---|---|---|
+| `OS_CRIADA` | `os-events` | publicado | Ao abrir a OS |
+| `ORCAMENTO_APROVADO` | `os-events` | publicado | Ao aprovar o orçamento |
+| `ORCAMENTO_REJEITADO` | `os-events` | publicado | Ao rejeitar o orçamento (OS cancelada) |
+| `OS_CANCELADA` | `os-events` | publicado | Cancelamento manual ou pagamento recusado no limite |
+| `ORCAMENTO_GERADO` | `billing-events` | consumido | Grava `orcamentoId` e `valorTotal`; vai a AGUARDANDO_APROVACAO |
+| `PAGAMENTO_CONFIRMADO` | `billing-events` | consumido | Vai a APROVADA |
+| `PAGAMENTO_FALHOU` | `billing-events` | consumido | Volta a AGUARDANDO_APROVACAO ou cancela no limite |
+| `PAGAMENTO_ESTORNADO` | `billing-events` | consumido | Só registra |
+| `DIAGNOSTICO_CONCLUIDO`, `ESTOQUE_RESERVADO` | `execution-events` | consumido | Só registra |
+| `EXECUCAO_INICIADA` | `execution-events` | consumido | Vai a EM_EXECUCAO |
+| `EXECUCAO_FINALIZADA` | `execution-events` | consumido | Vai a FINALIZADA |
+| `EXECUCAO_FALHOU` | `execution-events` | consumido | Cancela a OS |
 
 ---
 
-## Execução Local
+## Endpoints
 
-### Docker Compose
+Rotas de negócio exigem `Authorization: Bearer <JWT>` (perfis ATENDENTE e GERENTE), exceto as marcadas com **webhook**, que exigem o header `X-Webhook-Secret`.
 
-Sobe o PostgreSQL 16 e a aplicação compilada via `Dockerfile`:
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/api/auth/login` | Login; retorna o JWT |
+| POST | `/api/auth/usuario` | Cria usuário (GERENTE) |
+| GET/POST | `/api/cliente` | Lista (filtro `documento`) / cria |
+| GET/PUT/DELETE | `/api/cliente/{id}` | Consulta / atualiza / remove |
+| GET/POST | `/api/veiculo` | Lista (filtro `placa`) / cria |
+| GET/PUT/DELETE | `/api/veiculo/{id}` | Consulta / atualiza / remove |
+| PUT/DELETE | `/api/veiculo?placa=` | Atualiza / remove por placa |
+| GET | `/api/ordemDeServico` | Lista OS |
+| POST | `/api/ordemDeServico` | Abre a OS e publica `OS_CRIADA` |
+| GET | `/api/ordemDeServico/{id}` | Consulta a OS |
+| GET | `/api/ordemDeServico/{id}/historico` | Linha do tempo: status, eventos publicados e recebidos |
+| GET | `/api/ordemDeServico/cliente/{id}/ordens` | OS do cliente |
+| GET | `/api/ordemDeServico/veiculo/{id}/ordens` | OS do veículo |
+| PUT/DELETE | `/api/ordemDeServico/{id}` | Atualiza / remove |
+| POST | `/api/ordemDeServico/{id}/aprovacao` | **webhook:** aprova ou rejeita o orçamento |
+| POST | `/api/ordemDeServico/{id}/cancelar` | Cancela a OS (`motivo` obrigatório) |
+| POST | `/api/ordemDeServico/transicao/paraEntregue/{id}` | **webhook:** registra a entrega |
+
+Orçamento, pagamento e execução não têm endpoint REST: avançam por eventos.
+
+---
+
+## Execução local
+
+Pré-requisito: Docker (e JDK 21 para rodar fora do contêiner).
 
 ```bash
 docker compose up --build -d
 ```
 
-A API fica disponível em `http://localhost:8080`.
+Sobe o PostgreSQL, o **LocalStack** (tópicos, filas e DLQs criados por `localstack/init/ready.d/01-criar-recursos.sh`) e a aplicação em `http://localhost:8080`.
 
-Para incluir o SonarQube na stack (porta 9000):
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- Health: `http://localhost:8080/actuator/health`
+- Métricas: `http://localhost:8080/actuator/prometheus`
+- Login de exemplo: `gerente` / `senha@123` (também `atendente` e `mecanico`)
 
-```bash
-docker compose --profile tools up -d
-```
-
-### Gradle
-
-Sobe apenas o banco e executa a aplicação com hot-reload:
+Para simular o billing e o execution localmente, publique no LocalStack:
 
 ```bash
-docker compose up -d db
-./gradlew bootRun
+docker exec tech_challenge_localstack awslocal sns publish \
+  --topic-arn arn:aws:sns:us-east-1:000000000000:billing-events \
+  --message '{"eventId":"11111111-1111-1111-1111-111111111111","type":"ORCAMENTO_GERADO","version":1,"occurredAt":"2026-01-01T10:00:00Z","correlationId":"1","payload":{"osId":"1","orcamentoId":"orc-1","valorTotal":350.5}}'
 ```
 
----
+Para rodar a aplicação pelo Gradle (hot reload), suba só a infraestrutura com `docker compose up -d db localstack` e execute `./gradlew bootRun`.
 
-## Testes e Cobertura
+Para parar: `docker compose down`.
 
-```bash
-./gradlew test jacocoTestReport jacocoTestCoverageVerification
-```
+### Variáveis de ambiente
 
-Relatório HTML gerado em `app/build/reports/jacoco/test/html/index.html`. A build falha se a cobertura de linhas ficar abaixo de 80%.
-
----
-
-## Build da Imagem Docker
-
-```bash
-docker build --platform linux/amd64 -t tech-challenge-app:local -f app/Dockerfile .
-```
-
-O flag `--platform linux/amd64` é obrigatório. Os nós do cluster EKS utilizam `AL2023_x86_64_STANDARD`; uma imagem ARM64 causará `ImagePullBackOff` no deploy.
-
----
-
-## Variáveis de Ambiente
-
-| Variável | Padrão (dev local) | Descrição |
+| Variável | Padrão | Descrição |
 |---|---|---|
-| `SPRING_DATASOURCE_URL` / `DB_URL` | `jdbc:postgresql://localhost:5432/techchallenge` | URL JDBC de conexão com o banco |
-| `SPRING_DATASOURCE_USERNAME` / `DB_USER` | `postgres` | Usuário do banco |
-| `SPRING_DATASOURCE_PASSWORD` / `DB_PASSWORD` | `admin` | Senha do banco |
-| `JWT_SECRET` | `minha-chave-secreta-dev-minimo-32-chars!!` | Chave de assinatura dos tokens JWT (mín. 32 caracteres) |
-| `JWT_ACCESS_EXP` | `3600` | Validade do token em segundos |
-| `WEBHOOK_APROVACAO_SECRET` | `webhook-secret-key-123` | Chave de validação dos webhooks de transição de OS |
+| `SPRING_DATASOURCE_URL`, `_USERNAME`, `_PASSWORD` | PostgreSQL local | Banco de dados |
+| `JWT_SECRET`, `JWT_ACCESS_EXP` | chave de dev, `3600` | Assinatura e validade do JWT |
+| `WEBHOOK_APROVACAO_SECRET` | `webhook-secret-key-123` | Valor esperado em `X-Webhook-Secret` |
+| `AWS_REGION` | `us-east-1` | Região do SNS/SQS |
+| `OS_TOPICO_OS_EVENTS`, `OS_TOPICO_BILLING_EVENTS`, `OS_TOPICO_EXECUTION_EVENTS` | nomes dos tópicos | Nome ou ARN |
+| `OS_FILA_BILLING`, `OS_FILA_EXECUTION` | nomes das filas | Nome ou URL |
+| `OS_SAGA_PAGAMENTO_MAX_TENTATIVAS` | `3` | Falhas de pagamento até cancelar a OS |
+| `OS_OUTBOX_RELAY_*` | 1 s, lote 50, 5 tentativas | Intervalo, lote e tentativas do relay |
 
-Em produção, essas variáveis são injetadas pelo Kubernetes Secret `app-secrets`, criado automaticamente pela pipeline `deploy.yml`.
-
----
-
-## CI/CD (GitHub Actions)
-
-| Workflow | Disparo | O que faz |
-|---|---|---|
-| `pr.yml` | Pull Request para `main` | Compila, executa testes, verifica cobertura JaCoCo e valida o build da imagem Docker |
-| `deploy.yml` | Push na `main` ou disparo manual | Autentica na AWS, publica a imagem no ECR, configura o kubectl e aplica os manifestos no EKS |
-
-### Secrets do repositório
-
-| Secret | Descrição |
-|---|---|
-| `AWS_ACCESS_KEY_ID` | Credencial AWS |
-| `AWS_SECRET_ACCESS_KEY` | Credencial AWS |
-| `AWS_SESSION_TOKEN` | Token de sessão temporário (AWS Academy Learner Lab) |
-| `DB_URL` | String JDBC do RDS (`jdbc:postgresql://<host>:5432/techchallenge`) |
-| `DB_USER` | Usuário master do banco |
-| `DB_PASSWORD` | Senha do banco |
-| `JWT_SECRET` | Chave de assinatura dos tokens JWT (mínimo 32 caracteres) |
-| `WEBHOOK_APROVACAO_SECRET` | Chave de validação dos webhooks de transição de ordem de serviço |
+As credenciais de teste do LocalStack (`test`/`test`) existem só no `docker-compose.yml`.
 
 ---
 
-## Documentação da API
+## Testes, BDD e cobertura
 
-Com a aplicação em execução:
+```bash
+./gradlew :app:check
+```
 
-- Swagger UI: `http://<HOST>/swagger-ui/index.html`
-- OpenAPI JSON: `http://<HOST>/v3/api-docs`
-- Health: `http://<HOST>/actuator/health`
-- Métricas Prometheus: `http://<HOST>/actuator/prometheus`
-- **Postman Collections:** Coleções completas e arquivo de environment disponíveis na pasta `postman/` (com suporte à autenticação serverless via CPF e chave `baseUrl` centralizada).
+O `check` roda os testes unitários e de integração, o BDD e a verificação de cobertura. Os testes sobem Postgres e LocalStack sozinhos pelo `app/src/test/resources/docker-compose-test.yaml`, então o Docker precisa estar ativo.
 
----
-
-## Exemplos de Uso da API
-
-As requisições abaixo demonstram o fluxo padrão de operação do sistema. Todas as rotas de negócio requerem o token JWT no cabeçalho `Authorization: Bearer <TOKEN>`, obtido via autenticação de cliente no módulo serverless (`POST /auth` com `{"cpf": "..."}`) ou usuário interno (`POST /api/auth/login`).
-
-### 1. Cadastro e Consulta de Cliente
-
-Cadastra um novo cliente na oficina e realiza a busca por documento.
-
-* **Requisição de Criação (`POST /api/cliente`):**
-  ```http
-  POST /api/cliente
-  Content-Type: application/json
-  Authorization: Bearer <TOKEN>
-
-  {
-    "nome": "Carlos Silva",
-    "tipoPessoa": "FISICA",
-    "documento": "52998224725",
-    "dataNascimento": "1990-01-15",
-    "email": "carlos.silva@exemplo.com"
-  }
-  ```
-
-* **Resposta (`201 Created`):**
-  ```http
-  Location: /api/cliente/1
-  ```
-
-* **Consulta por Documento (`GET /api/cliente?documento=52998224725`):**
-  ```json
-  [
-    {
-      "id": 1,
-      "nome": "Carlos Silva",
-      "tipoPessoa": "FISICA",
-      "documento": "52998224725",
-      "dataNascimento": "1990-01-15",
-      "email": "carlos.silva@exemplo.com"
-    }
-  ]
-  ```
-
----
-
-### 2. Abertura de Ordem de Serviço
-
-Cria uma nova ordem de serviço vinculada ao cliente e ao veículo.
-
-* **Requisição (`POST /api/ordemDeServico`):**
-  ```http
-  POST /api/ordemDeServico
-  Content-Type: application/json
-  Authorization: Bearer <TOKEN>
-
-  {
-    "solicitacao": "Troca de pastilhas de freio dianteiras e alinhamento",
-    "idCliente": 1,
-    "idVeiculo": 1
-  }
-  ```
-
-* **Resposta (`201 Created`):**
-  ```json
-  {
-    "id": 1,
-    "solicitacao": "Troca de pastilhas de freio dianteiras e alinhamento",
-    "status": "RECEBIDA",
-    "valorTotal": 0.0,
-    "cliente": {
-      "id": 1,
-      "nome": "Carlos Silva",
-      "documento": "52998224725"
-    },
-    "veiculo": {
-      "id": 1,
-      "placa": "ABC1D23",
-      "modelo": "Civic"
-    }
-  }
-  ```
-
----
-
-### 3. Consulta de Ordens de Serviço por Cliente
-
-Lista o histórico e o status de todas as ordens de serviço de um cliente específico.
-
-* **Requisição (`GET /api/ordemDeServico/cliente/1/ordens`):**
-  ```http
-  GET /api/ordemDeServico/cliente/1/ordens
-  Authorization: Bearer <TOKEN>
-  ```
-
-* **Resposta (`200 OK`):**
-  ```json
-  [
-    {
-      "id": 1,
-      "solicitacao": "Troca de pastilhas de freio dianteiras e alinhamento",
-      "status": "RECEBIDA",
-      "valorTotal": 0.0,
-      "cliente": {
-        "id": 1,
-        "nome": "Carlos Silva"
-      },
-      "veiculo": {
-        "id": 1,
-        "placa": "ABC1D23"
-      }
-    }
-  ]
-  ```
-
----
-
-## Análise de Código e Segurança
-
-### SonarQube
+- **BDD (Cucumber, em português):** `app/src/test/resources/features/`: `saga_fluxo_feliz`, `saga_pagamento_recusado` e `saga_execucao_falhou`. O billing e o execution são simulados publicando no SNS do LocalStack.
+- **Cobertura:** relatório em `app/build/reports/jacoco/test/html/index.html`. A build falha abaixo de 80% de instruções. Ficam fora da cobertura apenas classes sem lógica (aplicação, configs, propriedades, entidades e DTOs), e as mesmas exclusões valem no Sonar.
+- **SonarQube local:**
 
 ```bash
 docker compose --profile tools up -d sonarqube
-# Acesse http://localhost:9000, gere um token e execute:
-./gradlew test jacocoTestReport sonar -Dsonar.token=<TOKEN>
+./gradlew :app:check :app:sonar -Dsonar.token=<TOKEN>
 ```
 
-### OWASP ZAP
+---
 
-```bash
-# Obter token JWT
-TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"login":"gerente","senha":"senha@123"}' | jq -r .accessToken)
+## CI/CD e deploy
 
-# Executar scan na especificação OpenAPI
-mkdir -p reports
-docker run --rm -v "$(pwd)/reports:/zap/wrk/:rw" zaproxy/zap-stable zap-api-scan.py \
-  -t http://host.docker.internal:8080/v3/api-docs \
-  -f openapi \
-  -r zap-report.html \
-  -z "-config replacer.full_list(0).matchtype=REQ_HEADER \
-      -config replacer.full_list(0).matchstr=Authorization \
-      -config replacer.full_list(0).replacement=\"Bearer $TOKEN\""
-```
+| Workflow | Disparo | O que faz |
+|---|---|---|
+| `.github/workflows/pr.yml` | Pull Request para `main` | `Testes e Cobertura (JaCoCo)`, `SonarQube Quality Gate` (falha o PR se o quality gate falhar) e `Validar Build da Imagem Docker` |
+| `.github/workflows/deploy.yml` | Push na `main` ou manual | Roda os testes, publica a imagem `os-service` no ECR e aplica `k8s/` no EKS |
 
-O relatório é gerado em `reports/zap-report.html`.
+- **Proteção da `main`:** [`docs/PROTECAO-BRANCH.md`](docs/PROTECAO-BRANCH.md).
+- **Kubernetes** (`k8s/`): Deployment, Service (NLB), HPA, PDB, ConfigMap `os-service-config`, Secret `os-service-secrets` (criado pelo `deploy.yml`) e `serviceaccount.yaml` com a annotation de IRSA. No AWS Academy (LabRole, sem IRSA), as credenciais vêm da role do nó.
+- **Mensageria na AWS:** `infra/aws/criar-recursos-mensageria.sh` (idempotente) cria tópicos, filas, DLQs, assinaturas e a policy das filas. `infra/aws/politica-iam-os-service.json` traz as permissões mínimas do serviço.
+- **Secrets do repositório:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `DB_URL`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `WEBHOOK_APROVACAO_SECRET`, `SONAR_TOKEN` e `SONAR_HOST_URL`.
+- **Imagem:** `docker build --platform linux/amd64 -t os-service:local -f app/Dockerfile .` (os nós do EKS são x86_64).
+
+---
+
+## Observabilidade
+
+- Logs JSON com `correlationId` (o osId nas rotas de OS; o header `X-Correlation-Id` ou um UUID nas demais), `eventId` e `eventType` nos logs de mensageria.
+- Métricas em `/actuator/prometheus`: `os_eventos_publicados_total{tipo}`, `os_eventos_consumidos_total{tipo,resultado}`, `os_outbox_pendentes` e `os_saga_transicoes_total{de,para}`.
+
+---
+
+## Documentação e entregáveis
+
+- Swagger/OpenAPI: `/swagger-ui/index.html` e `/v3/api-docs`
+- **Postman:** `postman/Tech Challenge Fase 4 - OS Service.postman_collection.json` e `postman/TechChallenge-Fase4.postman_environment.json`. Rode **Login** primeiro; o token e o id da OS são gravados nas variáveis.
+- Contrato de eventos: [`docs/CONTRATO-EVENTOS.md`](docs/CONTRATO-EVENTOS.md)
+- Checklist dos entregáveis: [`docs/EVIDENCIAS.md`](docs/EVIDENCIAS.md)

@@ -17,9 +17,13 @@ public class OpenApiConfig {
     public OpenAPI openAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("Tech Challenge – Oficina API")
-                        .description("API REST para gerenciamento de ordens de serviço")
-                        .version("1.0.0"))
+                        .title("OS Service — Tech Challenge Fase 4")
+                        .description("Serviço core da oficina: clientes, veículos, autenticação e ordens de serviço. "
+                                + "Participa da saga coreografada de orçamento, pagamento e execução trocando eventos "
+                                + "com o billing-service e o execution-service via SNS/SQS (padrão Outbox, consumidores "
+                                + "idempotentes e correlationId = id da OS). Consulte GET /api/ordemDeServico/{id}/historico "
+                                + "para acompanhar a saga de uma OS.")
+                        .version("2.0.0"))
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
                 .components(new Components()
                         .addSecuritySchemes(SECURITY_SCHEME_NAME,
