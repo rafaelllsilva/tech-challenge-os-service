@@ -576,4 +576,93 @@ public class OrdemDeServicoInteractorTest {
         assertEquals(StatusOrdemDeServico.CANCELADA, os.getStatus());
         verify(osGateway, never()).updateOrdemDeServico(any());
     }
+
+    // #################### Saga: eventos do execution ####################
+
+    @Test
+    public void given_osAprovada_when_execucaoIniciada_then_emExecucao() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.APROVADA);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        osUseCase.aplicarExecucaoIniciada(1L);
+
+        assertEquals(StatusOrdemDeServico.EM_EXECUCAO, os.getStatus());
+        verify(osGateway).updateOrdemDeServico(os);
+        verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.EM_EXECUCAO, AGORA);
+        verify(eventLogger).registrarStatusAlterado(eq(1L), eq(StatusOrdemDeServico.APROVADA),
+                eq(StatusOrdemDeServico.EM_EXECUCAO), anyLong(), eq(AGORA));
+    }
+
+    @Test
+    public void given_osRecebida_when_execucaoIniciada_then_jogaBadRequest() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        assertThrows(BadRequestException.class, () -> osUseCase.aplicarExecucaoIniciada(1L));
+        verify(osGateway, never()).updateOrdemDeServico(any());
+    }
+
+    @Test
+    public void given_osEmExecucao_when_execucaoFinalizada_then_finalizada() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.EM_EXECUCAO);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        osUseCase.aplicarExecucaoFinalizada(1L);
+
+        assertEquals(StatusOrdemDeServico.FINALIZADA, os.getStatus());
+        verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.FINALIZADA, AGORA);
+    }
+
+    @Test
+    public void given_osAprovada_when_execucaoFinalizada_then_jogaBadRequest() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.APROVADA);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        assertThrows(BadRequestException.class, () -> osUseCase.aplicarExecucaoFinalizada(1L));
+    }
+
+    @Test
+    public void given_osAprovadaOuEmExecucao_when_execucaoFalhou_then_canceladaSemPublicarEstorno() {
+        for (var status : List.of(StatusOrdemDeServico.APROVADA, StatusOrdemDeServico.EM_EXECUCAO)) {
+            var os = criarOrdemDeServico(1L, status);
+            when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+            osUseCase.aplicarExecucaoFalhou(1L);
+
+            assertEquals(StatusOrdemDeServico.CANCELADA, os.getStatus());
+        }
+        verifyNoInteractions(publicadorDeEventos);
+    }
+
+    @Test
+    public void given_osAguardandoPagamento_when_execucaoFalhou_then_jogaBadRequest() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_PAGAMENTO);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        assertThrows(BadRequestException.class, () -> osUseCase.aplicarExecucaoFalhou(1L));
+    }
+
+    @Test
+    public void given_osInexistente_when_eventoDoExecution_then_logaEIgnora() {
+        when(osGateway.findOrdemDeServicoById(9L)).thenReturn(Optional.empty());
+
+        osUseCase.aplicarExecucaoIniciada(9L);
+        osUseCase.aplicarExecucaoFinalizada(9L);
+        osUseCase.aplicarExecucaoFalhou(9L);
+        osUseCase.registrarEventoInformativo(9L, "DIAGNOSTICO_CONCLUIDO");
+
+        verify(osGateway, never()).updateOrdemDeServico(any());
+        verify(eventLogger, times(4)).registrarFalhaProcessamento(9L, "saga_event", "ORDER_NOT_FOUND", AGORA, false);
+    }
+
+    @Test
+    public void given_os_when_eventoInformativo_then_naoMudaStatus() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        osUseCase.registrarEventoInformativo(1L, "DIAGNOSTICO_CONCLUIDO");
+
+        assertEquals(StatusOrdemDeServico.RECEBIDA, os.getStatus());
+        verify(osGateway, never()).updateOrdemDeServico(any());
+    }
 }

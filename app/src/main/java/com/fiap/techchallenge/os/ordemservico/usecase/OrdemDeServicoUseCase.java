@@ -35,4 +35,15 @@ public interface OrdemDeServicoUseCase {
     void aplicarPagamentoFalhou(Long id, int maxTentativas);
 
     void aplicarPagamentoEstornado(Long id);
+
+    // Reações aos eventos do execution (saga)
+
+    void aplicarExecucaoIniciada(Long id);
+
+    void aplicarExecucaoFinalizada(Long id);
+
+    void aplicarExecucaoFalhou(Long id);
+
+    /** Eventos que só ficam registrados (sem mudar o status), como DIAGNOSTICO_CONCLUIDO. */
+    void registrarEventoInformativo(Long id, String tipoEvento);
 }

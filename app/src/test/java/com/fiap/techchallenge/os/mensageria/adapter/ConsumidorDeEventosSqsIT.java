@@ -3,7 +3,7 @@ package com.fiap.techchallenge.os.mensageria.adapter;
 import com.fiap.techchallenge.os.mensageria.contrato.EventEnvelope;
 import com.fiap.techchallenge.os.mensageria.contrato.EventoSerializer;
 import com.fiap.techchallenge.os.mensageria.contrato.TipoEvento;
-import com.fiap.techchallenge.os.mensageria.contrato.payload.EstoqueReservadoPayload;
+import com.fiap.techchallenge.os.mensageria.contrato.payload.OrcamentoAprovadoPayload;
 import com.fiap.techchallenge.os.mensageria.framework.persistence.EventoProcessadoRepository;
 import com.fiap.techchallenge.os.mensageria.usecase.ManipuladorDeEvento;
 import io.awspring.cloud.sqs.operations.SqsTemplate;
@@ -37,15 +37,15 @@ class ConsumidorDeEventosSqsIT {
         static final List<UUID> TRATADOS = new CopyOnWriteArrayList<>();
 
         @Bean
-        ManipuladorDeEvento<EstoqueReservadoPayload> manipuladorFakeDeEstoque() {
+        ManipuladorDeEvento<OrcamentoAprovadoPayload> manipuladorFakeDeOrcamentoAprovado() {
             return new ManipuladorDeEvento<>() {
                 @Override
                 public TipoEvento tipo() {
-                    return TipoEvento.ESTOQUE_RESERVADO;
+                    return TipoEvento.ORCAMENTO_APROVADO;
                 }
 
                 @Override
-                public void tratar(EventEnvelope<EstoqueReservadoPayload> evento) {
+                public void tratar(EventEnvelope<OrcamentoAprovadoPayload> evento) {
                     TRATADOS.add(evento.eventId());
                 }
             };
@@ -61,8 +61,8 @@ class ConsumidorDeEventosSqsIT {
     @Autowired
     private EventoProcessadoRepository processadoRepository;
 
-    private EventEnvelope<EstoqueReservadoPayload> evento() {
-        return EventEnvelope.novo(TipoEvento.ESTOQUE_RESERVADO, "99", new EstoqueReservadoPayload("99"), Clock.systemUTC());
+    private EventEnvelope<OrcamentoAprovadoPayload> evento() {
+        return EventEnvelope.novo(TipoEvento.ORCAMENTO_APROVADO, "99", new OrcamentoAprovadoPayload("99", "orc-99"), Clock.systemUTC());
     }
 
     @Test
@@ -81,7 +81,7 @@ class ConsumidorDeEventosSqsIT {
         assertThat(ManipuladorFake.TRATADOS.stream().filter(duplicado.eventId()::equals)).hasSize(1);
         assertThat(processadoRepository.existsById(duplicado.eventId())).isTrue();
         var registrado = processadoRepository.findById(duplicado.eventId()).orElseThrow();
-        assertThat(registrado.getTipo()).isEqualTo("ESTOQUE_RESERVADO");
+        assertThat(registrado.getTipo()).isEqualTo("ORCAMENTO_APROVADO");
         assertThat(registrado.getCorrelationId()).isEqualTo("99");
     }
 }

@@ -256,6 +256,36 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
                 log.info("Pagamento da Ordem de Serviço {} estornado (status atual '{}')", id, os.getStatus()));
     }
 
+    // ###########################################################################################
+    // # Saga: eventos do execution
+    // ###########################################################################################
+
+    @Override
+    @Transactional
+    public void aplicarExecucaoIniciada(Long id) {
+        buscarParaSaga(id).ifPresent(os -> aplicarTransicao(os, os::iniciarExecucao));
+    }
+
+    @Override
+    @Transactional
+    public void aplicarExecucaoFinalizada(Long id) {
+        buscarParaSaga(id).ifPresent(os -> aplicarTransicao(os, os::finalizarExecucao));
+    }
+
+    @Override
+    @Transactional
+    public void aplicarExecucaoFalhou(Long id) {
+        // O os-service não publica estorno: o billing reage a EXECUCAO_FALHOU e publica PAGAMENTO_ESTORNADO.
+        buscarParaSaga(id).ifPresent(os -> aplicarTransicao(os, os::falharExecucao));
+    }
+
+    @Override
+    @Transactional
+    public void registrarEventoInformativo(Long id, String tipoEvento) {
+        buscarParaSaga(id).ifPresent(os ->
+                log.info("Evento {} registrado para a Ordem de Serviço {} (status atual '{}')", tipoEvento, id, os.getStatus()));
+    }
+
     private Optional<OrdemDeServico> buscarParaSaga(Long id) {
         Optional<OrdemDeServico> os = this.osGateway.findOrdemDeServicoById(id);
         if (os.isEmpty()) {
