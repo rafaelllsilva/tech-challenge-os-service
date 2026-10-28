@@ -26,6 +26,7 @@ jar {
 dependencyManagement {
 	imports {
 		mavenBom 'io.awspring.cloud:spring-cloud-aws-dependencies:4.0.2'
+		mavenBom 'io.cucumber:cucumber-bom:8.0.4'
 	}
 }
 
@@ -61,11 +62,27 @@ dependencies {
 	implementation 'io.awspring.cloud:spring-cloud-aws-starter-sqs'
 	testImplementation 'org.awaitility:awaitility'
 
+	// BDD
+	testImplementation 'io.cucumber:cucumber-java'
+	testImplementation 'io.cucumber:cucumber-spring'
+	testImplementation 'io.cucumber:cucumber-junit-platform-engine'
+	testImplementation 'org.junit.platform:junit-platform-suite'
+
 	// JWT
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 }
+
+// Classes sem lógica de negócio, fora da cobertura (as mesmas exclusões valem para o Sonar).
+def coverageExclusions = [
+		'**/TechchallengeApplication*',
+		'**/config/**',
+		'**/*Config.class',
+		'**/*Properties*.class',
+		'**/*Entity.class',
+		'**/adapter/controller/dto/**'
+]
 
 tasks.named('test') {
 	useJUnitPlatform()
@@ -80,12 +97,13 @@ jacocoTestReport {
 	}
 	afterEvaluate {
 		classDirectories.setFrom(files(classDirectories.files.collect {
-			fileTree(dir: it)
+			fileTree(dir: it, exclude: coverageExclusions)
 		}))
 	}
 }
 
 jacocoTestCoverageVerification {
+	dependsOn test
 	violationRules {
 		rule {
 			limit {
@@ -93,6 +111,15 @@ jacocoTestCoverageVerification {
 			}
 		}
 	}
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, exclude: coverageExclusions)
+		}))
+	}
+}
+
+check {
+	dependsOn jacocoTestCoverageVerification
 }
 
 sonar {
@@ -101,5 +128,6 @@ sonar {
 		property 'sonar.host.url', 'http://localhost:9000'
 		property 'sonar.coverage.jacoco.xmlReportPaths',
 				'build/reports/jacoco/test/jacocoTestReport.xml'
+		property 'sonar.coverage.exclusions', coverageExclusions.join(',')
 	}
 }

@@ -65,6 +65,8 @@ class OutboxPublicadorDeEventosIT {
     @Test
     void naoPersisteNaOutboxQuandoATransacaoDaOsFazRollback() {
         EventEnvelope<OsCanceladaPayload> evento = evento();
+        // Outras ITs (e o BDD) deixam linhas commitadas na outbox: compara com a contagem anterior.
+        long antes = repository.count();
 
         assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(s -> {
             publicador.publicar(evento);
@@ -72,7 +74,7 @@ class OutboxPublicadorDeEventosIT {
         })).isInstanceOf(IllegalStateException.class);
 
         assertThat(repository.findById(evento.eventId())).isEmpty();
-        assertThat(repository.count()).isZero();
+        assertThat(repository.count()).isEqualTo(antes);
     }
 
     @Test
