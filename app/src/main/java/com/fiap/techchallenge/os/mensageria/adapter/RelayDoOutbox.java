@@ -6,6 +6,8 @@ import com.fiap.techchallenge.os.mensageria.framework.OutboxRelayProperties;
 import com.fiap.techchallenge.os.mensageria.framework.persistence.OutboxEventoEntity;
 import com.fiap.techchallenge.os.mensageria.framework.persistence.OutboxEventoRepository;
 import com.fiap.techchallenge.os.mensageria.framework.persistence.StatusOutbox;
+import com.fiap.techchallenge.os.observabilidade.MetricasDaSaga;
+import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
 import io.awspring.cloud.sns.core.SnsTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -34,14 +36,19 @@ public class RelayDoOutbox {
     private final MensageriaProperties mensageria;
     private final OutboxRelayProperties propriedades;
     private final Clock clock;
+    private final MetricasDaSaga metricas;
+    private final OrdemDeServicoEventLogger loggerEventos;
 
     public RelayDoOutbox(OutboxEventoRepository repository, SnsTemplate snsTemplate,
-                         MensageriaProperties mensageria, OutboxRelayProperties propriedades, Clock clock) {
+                         MensageriaProperties mensageria, OutboxRelayProperties propriedades, Clock clock,
+                         MetricasDaSaga metricas, OrdemDeServicoEventLogger loggerEventos) {
         this.repository = repository;
         this.snsTemplate = snsTemplate;
         this.mensageria = mensageria;
         this.propriedades = propriedades;
         this.clock = clock;
+        this.metricas = metricas;
+        this.loggerEventos = loggerEventos;
     }
 
     @Scheduled(fixedDelayString = "${os.outbox.relay.intervalo-ms:1000}")
@@ -66,7 +73,8 @@ public class RelayDoOutbox {
             evento.setStatus(StatusOutbox.ENVIADO);
             evento.setEnviadoEm(Instant.now(clock));
             evento.setUltimoErro(null);
-            log.info("Evento {} publicado no tópico {}", evento.getTipo(), evento.getTopico());
+            metricas.eventoPublicado(evento.getTipo());
+            loggerEventos.registrarEventoPublicado(evento.getTipo(), evento.getTopico());
         } catch (Exception e) {
             registrarFalha(evento, e);
         } finally {

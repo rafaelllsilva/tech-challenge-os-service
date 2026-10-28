@@ -1,5 +1,9 @@
 package com.fiap.techchallenge.os.mensageria.adapter;
 
+import com.fiap.techchallenge.os.observabilidade.MetricasDaSaga;
+import com.fiap.techchallenge.os.mensageria.framework.persistence.OutboxEventoRepository;
+import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.fiap.techchallenge.os.exception.BadRequestException;
 import com.fiap.techchallenge.os.mensageria.contrato.EventEnvelope;
 import com.fiap.techchallenge.os.mensageria.contrato.EventoSerializer;
@@ -39,13 +43,16 @@ class DespachanteDeEventosTest {
     @SuppressWarnings("unchecked")
     private final ManipuladorDeEvento<PagamentoEstornadoPayload> manipulador = mock(ManipuladorDeEvento.class);
 
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private final MetricasDaSaga metricas = new MetricasDaSaga(registry, mock(OutboxEventoRepository.class));
+
     private DespachanteDeEventos despachante;
 
     @BeforeEach
     void setUp() {
         when(manipulador.tipo()).thenReturn(TipoEvento.PAGAMENTO_ESTORNADO);
         despachante = new DespachanteDeEventos(serializer, repository, TransactionOperations.withoutTransaction(),
-                CLOCK, List.of(manipulador));
+                CLOCK, metricas, mock(OrdemDeServicoEventLogger.class), List.of(manipulador));
     }
 
     private EventEnvelope<PagamentoEstornadoPayload> estorno() {
@@ -148,7 +155,37 @@ class DespachanteDeEventosTest {
     @Test
     void doisManipuladoresParaOMesmoTipoFalhamNaInicializacao() {
         assertThatThrownBy(() -> new DespachanteDeEventos(serializer, repository,
-                TransactionOperations.withoutTransaction(), CLOCK, List.of(manipulador, manipulador)))
+                TransactionOperations.withoutTransaction(), CLOCK, metricas,
+                mock(OrdemDeServicoEventLogger.class), List.of(manipulador, manipulador)))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    private double consumidos(String resultado) {
+        var counter = registry.find("os.eventos.consumidos")
+                .tags("tipo", "PAGAMENTO_ESTORNADO", "resultado", resultado).counter();
+        return counter == null ? 0 : counter.count();
+    }
+
+    @Test
+    void contabilizaSucessoDuplicadoEErroTecnico() throws Exception {
+        String json = serializer.serializar(estorno());
+        despachante.despachar(json);
+        assertThat(consumidos("sucesso")).isEqualTo(1);
+
+        when(repository.existsById(any())).thenReturn(true);
+        despachante.despachar(json);
+        assertThat(consumidos("duplicado")).isEqualTo(1);
+
+        when(repository.existsById(any())).thenReturn(false);
+        doThrow(new RuntimeException("falha técnica")).when(manipulador).tratar(any());
+        assertThatThrownBy(() -> despachante.despachar(json)).isInstanceOf(RuntimeException.class);
+        assertThat(consumidos("erro_tecnico")).isEqualTo(1);
+    }
+
+    @Test
+    void contabilizaErroDeNegocio() throws Exception {
+        doThrow(new IllegalStateException("transição inválida")).when(manipulador).tratar(any());
+        despachante.despachar(serializer.serializar(estorno()));
+        assertThat(consumidos("erro_negocio")).isEqualTo(1);
     }
 }

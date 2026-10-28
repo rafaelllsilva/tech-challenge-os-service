@@ -269,6 +269,7 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
                 return;
             }
             aplicarTransicao(os, os::rejeitarOrcamento);
+            loggerEventos.registrarCompensacao(os.getId(), "ORCAMENTO_REJEITADO", os.getStatus(), clock.instant());
         });
     }
 
@@ -284,6 +285,7 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
         buscarParaSaga(id).ifPresent(os -> {
             StatusOrdemDeServico statusAnterior = os.getStatus();
             aplicarTransicao(os, () -> os.registrarFalhaPagamento(maxTentativas));
+            loggerEventos.registrarCompensacao(os.getId(), "PAGAMENTO_FALHOU", os.getStatus(), clock.instant());
             if (StatusOrdemDeServico.CANCELADA.equals(os.getStatus())) {
                 String osId = String.valueOf(os.getId());
                 publicadorDeEventos.publicar(EventEnvelope.novo(TipoEvento.OS_CANCELADA, osId,
@@ -320,7 +322,10 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
     @Transactional
     public void aplicarExecucaoFalhou(Long id) {
         // O os-service não publica estorno: o billing reage a EXECUCAO_FALHOU e publica PAGAMENTO_ESTORNADO.
-        buscarParaSaga(id).ifPresent(os -> aplicarTransicao(os, os::falharExecucao));
+        buscarParaSaga(id).ifPresent(os -> {
+            aplicarTransicao(os, os::falharExecucao);
+            loggerEventos.registrarCompensacao(os.getId(), "EXECUCAO_FALHOU", os.getStatus(), clock.instant());
+        });
     }
 
     @Override

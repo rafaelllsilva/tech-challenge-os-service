@@ -51,4 +51,37 @@ class OrdemDeServicoEventLoggerTest {
             appender.stop();
         }
     }
+
+    private ListAppender<ILoggingEvent> anexar(Logger logger) {
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    @Test
+    void logsDeEventoPublicadoConsumidoECompensacaoTrazemOsCamposDaSaga() {
+        OrdemDeServicoEventLogger loggerEventos = new OrdemDeServicoEventLogger(mock(ApplicationEventPublisher.class));
+        Logger logger = (Logger) LoggerFactory.getLogger(OrdemDeServicoEventLogger.class);
+        ListAppender<ILoggingEvent> appender = anexar(logger);
+        try {
+            loggerEventos.registrarEventoPublicado("OS_CRIADA", "os-events");
+            loggerEventos.registrarEventoConsumido("PAGAMENTO_CONFIRMADO", "sucesso");
+            loggerEventos.registrarCompensacao(42L, "PAGAMENTO_FALHOU", StatusOrdemDeServico.AGUARDANDO_APROVACAO,
+                    Instant.parse("2026-08-29T12:00:00Z"));
+
+            var eventos = appender.list.stream().map(e -> e.getKeyValuePairs().stream()
+                    .collect(java.util.stream.Collectors.toMap(pair -> pair.key, pair -> pair.value))).toList();
+            assertEquals(Map.of("serviceOrderEventType", "saga_event_published", "sagaEventType", "OS_CRIADA",
+                    "topic", "os-events"), eventos.get(0));
+            assertEquals(Map.of("serviceOrderEventType", "saga_event_consumed", "sagaEventType", "PAGAMENTO_CONFIRMADO",
+                    "result", "sucesso"), eventos.get(1));
+            assertEquals(Map.of("serviceOrderEventType", "saga_compensation", "orderId", 42L,
+                    "reason", "PAGAMENTO_FALHOU", "resultingStatus", "AGUARDANDO_APROVACAO",
+                    "occurredAt", "2026-08-29T12:00:00Z"), eventos.get(2));
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+    }
 }

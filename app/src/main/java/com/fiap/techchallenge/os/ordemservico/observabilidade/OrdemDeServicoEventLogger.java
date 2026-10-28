@@ -66,6 +66,34 @@ public class OrdemDeServicoEventLogger {
                 .log("Falha no processamento da ordem de serviço");
     }
 
+    // correlationId e eventId não entram como key-value: já vão no MDC, e o JSON não aceita chave repetida.
+    public void registrarEventoPublicado(String tipo, String topico) {
+        log.atInfo()
+                .addKeyValue("serviceOrderEventType", "saga_event_published")
+                .addKeyValue("sagaEventType", tipo)
+                .addKeyValue("topic", topico)
+                .log("Evento da saga publicado");
+    }
+
+    public void registrarEventoConsumido(String tipo, String resultado) {
+        log.atInfo()
+                .addKeyValue("serviceOrderEventType", "saga_event_consumed")
+                .addKeyValue("sagaEventType", tipo)
+                .addKeyValue("result", resultado)
+                .log("Evento da saga consumido");
+    }
+
+    public void registrarCompensacao(Long idOrdemDeServico, String motivo, StatusOrdemDeServico statusResultante,
+                                     Instant ocorreuEm) {
+        log.atWarn()
+                .addKeyValue("serviceOrderEventType", "saga_compensation")
+                .addKeyValue("orderId", idOrdemDeServico)
+                .addKeyValue("reason", motivo)
+                .addKeyValue("resultingStatus", statusResultante.name())
+                .addKeyValue("occurredAt", ocorreuEm.toString())
+                .log("Compensação da saga aplicada");
+    }
+
     public record OrdemDeServicoCriada(Long idOrdemDeServico, StatusOrdemDeServico status, Instant ocorreuEm) {}
 
     public record StatusDaOrdemDeServicoAlterado(Long idOrdemDeServico, StatusOrdemDeServico statusAnterior,

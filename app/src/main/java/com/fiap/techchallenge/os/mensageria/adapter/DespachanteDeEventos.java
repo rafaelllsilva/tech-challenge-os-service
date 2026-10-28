@@ -10,6 +10,8 @@ import com.fiap.techchallenge.os.mensageria.contrato.TipoEvento;
 import com.fiap.techchallenge.os.mensageria.framework.persistence.EventoProcessadoEntity;
 import com.fiap.techchallenge.os.mensageria.framework.persistence.EventoProcessadoRepository;
 import com.fiap.techchallenge.os.mensageria.usecase.ManipuladorDeEvento;
+import com.fiap.techchallenge.os.observabilidade.MetricasDaSaga;
+import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
@@ -34,15 +36,20 @@ public class DespachanteDeEventos {
     private final EventoProcessadoRepository processadoRepository;
     private final TransactionOperations transacao;
     private final Clock clock;
+    private final MetricasDaSaga metricas;
+    private final OrdemDeServicoEventLogger loggerEventos;
     private final Map<TipoEvento, ManipuladorDeEvento<?>> manipuladores = new EnumMap<>(TipoEvento.class);
 
     public DespachanteDeEventos(EventoSerializer serializer, EventoProcessadoRepository processadoRepository,
                                 TransactionOperations transacao, Clock clock,
+                                MetricasDaSaga metricas, OrdemDeServicoEventLogger loggerEventos,
                                 List<ManipuladorDeEvento<?>> manipuladores) {
         this.serializer = serializer;
         this.processadoRepository = processadoRepository;
         this.transacao = transacao;
         this.clock = clock;
+        this.metricas = metricas;
+        this.loggerEventos = loggerEventos;
         for (ManipuladorDeEvento<?> manipulador : manipuladores) {
             if (this.manipuladores.putIfAbsent(manipulador.tipo(), manipulador) != null) {
                 throw new IllegalStateException("Mais de um manipulador para o evento " + manipulador.tipo());
@@ -56,6 +63,7 @@ public class DespachanteDeEventos {
             evento = serializer.desserializar(json);
         } catch (EventoDesconhecidoException e) {
             log.warn("Evento descartado: {}", e.getMessage());
+            metricas.eventoConsumido("DESCONHECIDO", MetricasDaSaga.RESULTADO_IGNORADO);
             return ResultadoDoProcessamento.TIPO_DESCONHECIDO;
         }
 
@@ -63,15 +71,35 @@ public class DespachanteDeEventos {
         MDC.put("eventId", evento.eventId().toString());
         MDC.put("eventType", evento.type().name());
         try {
-            return transacao.execute(status -> processar(evento));
+            ResultadoDoProcessamento resultado = transacao.execute(status -> processar(evento));
+            registrarConsumo(evento, resultado);
+            return resultado;
         } catch (BadRequestException | ConflictException | NotFoundException | IllegalStateException e) {
             log.warn("Evento {} rejeitado por regra de negócio: {}", evento.type(), e.getMessage());
+            registrarConsumo(evento, ResultadoDoProcessamento.ERRO_NEGOCIO);
             return ResultadoDoProcessamento.ERRO_NEGOCIO;
+        } catch (RuntimeException e) {
+            registrarConsumo(evento, MetricasDaSaga.RESULTADO_ERRO_TECNICO);
+            throw e;
         } finally {
             MDC.remove("correlationId");
             MDC.remove("eventId");
             MDC.remove("eventType");
         }
+    }
+
+    private void registrarConsumo(EventEnvelope<?> evento, ResultadoDoProcessamento resultado) {
+        registrarConsumo(evento, switch (resultado) {
+            case SUCESSO -> MetricasDaSaga.RESULTADO_SUCESSO;
+            case DUPLICADO -> MetricasDaSaga.RESULTADO_DUPLICADO;
+            case ERRO_NEGOCIO -> MetricasDaSaga.RESULTADO_ERRO_NEGOCIO;
+            case SEM_HANDLER, TIPO_DESCONHECIDO -> MetricasDaSaga.RESULTADO_IGNORADO;
+        });
+    }
+
+    private void registrarConsumo(EventEnvelope<?> evento, String resultado) {
+        metricas.eventoConsumido(evento.type().name(), resultado);
+        loggerEventos.registrarEventoConsumido(evento.type().name(), resultado);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

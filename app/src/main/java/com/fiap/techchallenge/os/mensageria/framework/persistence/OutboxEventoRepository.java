@@ -20,5 +20,7 @@ public interface OutboxEventoRepository extends JpaRepository<OutboxEventoEntity
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
     List<OutboxEventoEntity> findByStatusOrderByOcorridoEmAsc(StatusOutbox status, Pageable pageable);
 
+    long countByStatus(StatusOutbox status);
+
     List<OutboxEventoEntity> findByCorrelationId(String correlationId);
 }
