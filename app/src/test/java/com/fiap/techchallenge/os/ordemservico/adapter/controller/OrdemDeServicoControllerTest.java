@@ -54,7 +54,7 @@ public class OrdemDeServicoControllerTest {
         dto.setId(id);
         dto.setStatus(StatusOrdemDeServico.RECEBIDA);
         dto.setSolicitacao("Problema nos freios.");
-        dto.setOrcamento(BigDecimal.valueOf(0L, 2));
+        dto.setValorTotal(BigDecimal.valueOf(0L, 2));
         return dto;
     }
 
@@ -62,7 +62,7 @@ public class OrdemDeServicoControllerTest {
         return OrdemDeServicoResponse.builder()
                 .id(os.getId())
                 .status(os.getStatus().name())
-                .orcamento(os.getOrcamento())
+                .valorTotal(os.getValorTotal())
                 .solicitacao(os.getSolicitacao())
                 .build();
     }
@@ -71,7 +71,7 @@ public class OrdemDeServicoControllerTest {
         return OrdemDeServicoSimplesResponse.builder()
                 .id(os.getId())
                 .status(os.getStatus().name())
-                .orcamento(os.getOrcamento())
+                .valorTotal(os.getValorTotal())
                 .solicitacao(os.getSolicitacao())
                 .dataHoraCriacao(os.getDataHoraCriacao())
                 .build();
@@ -160,11 +160,11 @@ public class OrdemDeServicoControllerTest {
     public void given_ordemDeServicoExiste_when_atualizaOrdemDeServico_then_retornaOrdemAtualizada() throws Exception {
         var id = 1L;
         var request = new UpdateOrdemDeServicoRequest();
-        request.setOrcamento(BigDecimal.valueOf(500L));
+        request.setSolicitacao("Troca de óleo.");
         var url = CONTROLLER_PATH + "{id}";
         var os = criarOrdemDeServico(id);
 
-        when(osUseCase.updateOrdemDeServico(any(), any(), any())).thenReturn(os);
+        when(osUseCase.updateOrdemDeServico(any(), any())).thenReturn(os);
         when(osMapper.toResponse(any())).thenReturn(converterEmResponse(os));
 
         mockMvc.perform(put(url, id)
@@ -177,10 +177,10 @@ public class OrdemDeServicoControllerTest {
     @Test
     public void given_ordemDeServicoNaoExiste_when_atualizaOrdemDeServico_then_retornaNotFound() throws Exception {
         var request = new UpdateOrdemDeServicoRequest();
-        request.setOrcamento(BigDecimal.valueOf(500L));
+        request.setSolicitacao("Troca de óleo.");
         var url = CONTROLLER_PATH + "{id}";
 
-        when(osUseCase.updateOrdemDeServico(any(), any(), any())).thenReturn(null);
+        when(osUseCase.updateOrdemDeServico(any(), any())).thenReturn(null);
 
         mockMvc.perform(put(url, 1L)
                 .contentType(MediaType.APPLICATION_JSON)

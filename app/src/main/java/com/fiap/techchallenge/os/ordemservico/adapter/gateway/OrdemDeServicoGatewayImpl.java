@@ -59,7 +59,9 @@ public class OrdemDeServicoGatewayImpl implements OrdemDeServicoGateway {
     public OrdemDeServico updateOrdemDeServico(OrdemDeServico os) {
         OrdemDeServicoEntity osJpaEditada = this.repository.findById(os.getId()).orElseThrow();
         osJpaEditada.setStatus(os.getStatus());
-        osJpaEditada.setOrcamento(os.getOrcamento());
+        osJpaEditada.setOrcamentoId(os.getOrcamentoId());
+        osJpaEditada.setValorTotal(os.getValorTotal());
+        osJpaEditada.setTentativasPagamento(os.getTentativasPagamento());
         osJpaEditada.setSolicitacao(os.getSolicitacao());
         osJpaEditada.setCliente(os.getCliente() != null ? ClienteGatewayImpl.toEntity(os.getCliente()) : null);
         osJpaEditada.setVeiculo(os.getVeiculo() != null ? VeiculoGatewayImpl.toEntity(os.getVeiculo()) : null);
@@ -84,7 +86,9 @@ public class OrdemDeServicoGatewayImpl implements OrdemDeServicoGateway {
                 ? new OrdemDeServico(
                     entity.getId(),
                     entity.getStatus(),
-                    entity.getOrcamento(),
+                    entity.getOrcamentoId(),
+                    entity.getValorTotal(),
+                    entity.getTentativasPagamento(),
                     entity.getSolicitacao(),
                     entity.getDataHoraCriacao(),
                     entity.getCliente() != null ? ClienteGatewayImpl.toDomain(entity.getCliente()) : null,
@@ -98,7 +102,9 @@ public class OrdemDeServicoGatewayImpl implements OrdemDeServicoGateway {
                 ? new OrdemDeServicoEntity(
                     domain.getId(),
                     domain.getStatus(),
-                    domain.getOrcamento(),
+                    domain.getOrcamentoId(),
+                    domain.getValorTotal(),
+                    domain.getTentativasPagamento(),
                     domain.getSolicitacao(),
                     domain.getDataHoraCriacao(),
                     domain.getCliente() != null ? ClienteGatewayImpl.toEntity(domain.getCliente()) : null,

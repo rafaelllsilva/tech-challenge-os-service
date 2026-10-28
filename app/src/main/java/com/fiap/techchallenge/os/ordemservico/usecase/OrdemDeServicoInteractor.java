@@ -91,7 +91,7 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
             Instant ocorreuEm = clock.instant();
             OrdemDeServico novaOs = new OrdemDeServico();
             novaOs.setSolicitacao(solicitacao);
-            novaOs.setOrcamento(BigDecimal.valueOf(0L, 2));
+            novaOs.setValorTotal(BigDecimal.valueOf(0L, 2));
             novaOs.setDataHoraCriacao(LocalDateTime.ofInstant(ocorreuEm, ZoneOffset.UTC));
             novaOs.setCliente(cOpt.get());
             novaOs.setVeiculo(vOpt.get());
@@ -113,43 +113,23 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
 
     @Override
     @Transactional
-    public OrdemDeServico updateOrdemDeServico(Long id, BigDecimal orcamento, String status) {
+    public OrdemDeServico updateOrdemDeServico(Long id, String solicitacao) {
         try {
             Optional<OrdemDeServico> osAtualOpt = this.osGateway.findOrdemDeServicoById(id);
 
             if (osAtualOpt.isPresent()) {
                 var osEditada = osAtualOpt.get();
-                if (orcamento != null) osEditada.setOrcamento(orcamento);
-                if (status != null) {
-                    StatusOrdemDeServico statusEnum = StatusOrdemDeServico.valueOf(status);
-                    if (osEditada.podeTransicionarParaStatus(statusEnum).permitida()) {
-                        StatusOrdemDeServico statusAnterior = osEditada.getStatus();
-                        Instant ocorreuEm = clock.instant();
-                        long duracaoNoStatusAtual = calcularDuracaoNoStatusAtual(id, ocorreuEm);
-                        osEditada.setStatus(statusEnum);
-                        osEditada = this.osGateway.updateOrdemDeServico(osEditada);
-                        historicoStatusOrdemDeServicoGateway.registrarStatus(id, statusEnum, ocorreuEm);
-                        loggerEventos.registrarStatusAlterado(osEditada.getId(), statusAnterior, statusEnum, duracaoNoStatusAtual, ocorreuEm);
-                    } else {
-                        loggerEventos.registrarFalhaProcessamento(id, "status_transition", "INVALID_STATUS_TRANSITION", clock.instant(), false);
-                        throw new BadRequestException("Erro! A alteração de status é inválida!");
-                    }
-                }
-
-                if (status == null) {
-                    osEditada = this.osGateway.updateOrdemDeServico(osEditada);
-                }
-
-                return osEditada;
+                if (solicitacao != null) osEditada.setSolicitacao(solicitacao);
+                return this.osGateway.updateOrdemDeServico(osEditada);
             }
 
             String message = getMensagemOsNaoExiste(id);
-            loggerEventos.registrarFalhaProcessamento(id, "status_transition", "ORDER_NOT_FOUND", clock.instant(), false);
+            loggerEventos.registrarFalhaProcessamento(id, "update", "ORDER_NOT_FOUND", clock.instant(), false);
             throw new BadRequestException(message);
         } catch (BadRequestException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            loggerEventos.registrarFalhaProcessamento(id, "status_transition", "UNEXPECTED_ERROR", clock.instant(), true);
+            loggerEventos.registrarFalhaProcessamento(id, "update", "UNEXPECTED_ERROR", clock.instant(), true);
             throw ex;
         }
     }
@@ -218,7 +198,7 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
 
         switch (os.getStatus()) {
             case AGUARDANDO_APROVACAO -> dto.setMensagem(enviarEmailDeSoliciatacaoDeAprovacao(os));
-            case APROVADA -> dto.setMensagem(receberEmailComAprovacao(os));
+            case AGUARDANDO_PAGAMENTO -> dto.setMensagem(receberEmailComAprovacao(os));
             default -> dto.setMensagem(mensagem);
         };
 

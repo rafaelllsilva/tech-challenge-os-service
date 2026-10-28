@@ -27,8 +27,14 @@ public class OrdemDeServicoEntity {
     @Column(name = "status", columnDefinition = "varchar")
     private StatusOrdemDeServico status;
 
-    @Column(name = "orcamento", columnDefinition = "numeric")
-    private BigDecimal orcamento;
+    @Column(name = "orcamento_id", length = 64)
+    private String orcamentoId;
+
+    @Column(name = "valor_total", columnDefinition = "numeric")
+    private BigDecimal valorTotal;
+
+    @Column(name = "tentativas_pagamento", nullable = false)
+    private int tentativasPagamento;
 
     @Column(name = "solicitacao", columnDefinition = "varchar")
     private String solicitacao;

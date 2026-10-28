@@ -171,7 +171,7 @@ public class ListagemOrdemDeServicoComparatorTest {
         os.setId(id);
         os.setStatus(status);
         os.setDataHoraCriacao(dataHoraCriacao);
-        os.setOrcamento(BigDecimal.ZERO);
+        os.setValorTotal(BigDecimal.ZERO);
         os.setSolicitacao("Solicitação teste");
         return os;
     }

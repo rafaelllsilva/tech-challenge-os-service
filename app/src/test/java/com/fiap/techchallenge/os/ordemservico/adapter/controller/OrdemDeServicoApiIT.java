@@ -5,6 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.OrdemDeServicoResponse;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.CreateOrdemDeServicoRequest;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.UpdateOrdemDeServicoRequest;
+import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.usecase.OrdemDeServicoGateway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -206,19 +207,19 @@ public class OrdemDeServicoApiIT {
         Long osId = getIdDeOrdemDeServicoCriada(resultado);
 
         UpdateOrdemDeServicoRequest updateRequest = new UpdateOrdemDeServicoRequest();
-        updateRequest.setOrcamento(BigDecimal.valueOf(500.00));
+        updateRequest.setSolicitacao("OS editada");
 
         mockMvc.perform(put(CONTROLLER_PATH + osId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.orcamento").value(500.00));
+                .andExpect(jsonPath("$.solicitacao").value("OS editada"));
     }
 
     @Test
     public void given_idInexistente_when_updateOrdemDeServico_then_retorna400() throws Exception {
         UpdateOrdemDeServicoRequest request = new UpdateOrdemDeServicoRequest();
-        request.setOrcamento(BigDecimal.valueOf(500.00));
+        request.setSolicitacao("OS editada");
 
         mockMvc.perform(put(CONTROLLER_PATH + "999999")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -258,7 +259,7 @@ public class OrdemDeServicoApiIT {
     }
 
     @Test
-    public void given_idValido_when_notificarMecanicoParaDiagnostico_then_retorna200() throws Exception {
+    public void given_osRecebida_when_notificarMecanicoParaDiagnostico_then_retorna400() throws Exception {
         Long clienteId = getClienteId();
         Long veiculoId = getVeiculo();
 
@@ -276,8 +277,8 @@ public class OrdemDeServicoApiIT {
         Long osId = getIdDeOrdemDeServicoCriada(resultado);
 
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.sucesso").value(true));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.sucesso").value(false));
     }
 
     @Test
@@ -298,9 +299,8 @@ public class OrdemDeServicoApiIT {
 
         Long osId = getIdDeOrdemDeServicoCriada(resultado);
 
-        // Primeiro muda para EM_DIAGNOSTICO
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
+        // Força o status EM_DIAGNOSTICO (dado legado)
+        forcarStatus(osId, StatusOrdemDeServico.EM_DIAGNOSTICO);
 
         // Tenta mudar para EM_DIAGNOSTICO novamente (já está neste status)
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
@@ -326,11 +326,7 @@ public class OrdemDeServicoApiIT {
 
         Long osId = getIdDeOrdemDeServicoCriada(resultado);
 
-        // Muda para EM_DIAGNOSTICO
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Define o orçamento (> 0) para permitir enviar para aprovação
+        // Registra o orçamento da OS
         definirOrcamento(osId, BigDecimal.valueOf(300.00));
 
         // Agora envia para aprovação
@@ -340,12 +336,12 @@ public class OrdemDeServicoApiIT {
     }
 
     @Test
-    public void given_osSemOrcamento_when_enviarParaAprovacaoDoCliente_then_retorna400() throws Exception {
+    public void given_osAguardandoAprovacao_when_enviarParaAprovacaoDoCliente_then_retorna400() throws Exception {
         Long clienteId = getClienteId();
         Long veiculoId = getVeiculo();
 
         CreateOrdemDeServicoRequest request = new CreateOrdemDeServicoRequest();
-        request.setSolicitacao("OS sem orçamento");
+        request.setSolicitacao("OS já aguardando aprovação");
         request.setIdCliente(clienteId);
         request.setIdVeiculo(veiculoId);
 
@@ -357,11 +353,9 @@ public class OrdemDeServicoApiIT {
 
         Long osId = getIdDeOrdemDeServicoCriada(resultado);
 
-        // Muda para EM_DIAGNOSTICO mas sem definir orçamento
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
+        forcarStatus(osId, StatusOrdemDeServico.AGUARDANDO_APROVACAO);
 
-        // Tenta enviar para aprovação sem orçamento
+        // Tenta enviar para aprovação novamente
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.sucesso").value(false));
@@ -385,11 +379,7 @@ public class OrdemDeServicoApiIT {
 
         Long osId = getIdDeOrdemDeServicoCriada(resultado);
 
-        // Completa fluxo até APROVADA
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Define o orçamento (> 0) para permitir enviar para aprovação
+        // Registra o orçamento da OS
         definirOrcamento(osId, BigDecimal.valueOf(300.00));
 
         // Envia para aprovação
@@ -404,6 +394,9 @@ public class OrdemDeServicoApiIT {
                 .andExpect(status().isOk());
 
         // Inicia execução
+        // O pagamento é confirmado pelo billing-service (evento); aqui o status é forçado
+        forcarStatus(osId, StatusOrdemDeServico.APROVADA);
+
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEmExecucao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sucesso").value(true));
@@ -451,11 +444,7 @@ public class OrdemDeServicoApiIT {
 
         Long osId = getIdDeOrdemDeServicoCriada(resultado);
 
-        // Completa fluxo até EM_EXECUCAO
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Define o orçamento (> 0) para permitir enviar para aprovação
+        // Registra o orçamento da OS
         definirOrcamento(osId, BigDecimal.valueOf(300.00));
 
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
@@ -466,6 +455,9 @@ public class OrdemDeServicoApiIT {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(aprovacaoClienteBody))
                 .andExpect(status().isOk());
+
+        // O pagamento é confirmado pelo billing-service (evento); aqui o status é forçado
+        forcarStatus(osId, StatusOrdemDeServico.APROVADA);
 
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEmExecucao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isOk());
@@ -518,11 +510,7 @@ public class OrdemDeServicoApiIT {
 
         Long osId = getIdDeOrdemDeServicoCriada(resultado);
 
-        // Completa fluxo até FINALIZADA
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Define o orçamento (> 0) para permitir enviar para aprovação
+        // Registra o orçamento da OS
         definirOrcamento(osId, BigDecimal.valueOf(300.00));
 
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId)
@@ -534,6 +522,9 @@ public class OrdemDeServicoApiIT {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(aprovacaoClienteBody))
                 .andExpect(status().isOk());
+
+        // O pagamento é confirmado pelo billing-service (evento); aqui o status é forçado
+        forcarStatus(osId, StatusOrdemDeServico.APROVADA);
 
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraEmExecucao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
                 .andExpect(status().isOk());
@@ -589,11 +580,7 @@ public class OrdemDeServicoApiIT {
 
         Long osId = getIdDeOrdemDeServicoCriada(resultado);
 
-        // Completa fluxo até AGUARDANDO_APROVACAO
-        mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraDiagnostico/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
-                .andExpect(status().isOk());
-
-        // Define o orçamento (> 0) para permitir enviar para aprovação
+        // Registra o orçamento da OS
         definirOrcamento(osId, BigDecimal.valueOf(300.00));
 
         mockMvc.perform(post(CONTROLLER_PATH + "transicao/paraAprovacao/" + osId).header("X-Webhook-Secret", "webhook-secret-key-123"))
@@ -637,14 +624,17 @@ public class OrdemDeServicoApiIT {
 
     // Helpers
 
-    private void definirOrcamento(Long osId, BigDecimal orcamento) throws Exception {
-        UpdateOrdemDeServicoRequest updateRequest = new UpdateOrdemDeServicoRequest();
-        updateRequest.setOrcamento(orcamento);
+    private void definirOrcamento(Long osId, BigDecimal valorTotal) {
+        var os = osGateway.findOrdemDeServicoById(osId).orElseThrow();
+        os.setOrcamentoId("orc-" + osId);
+        os.setValorTotal(valorTotal);
+        osGateway.updateOrdemDeServico(os);
+    }
 
-        mockMvc.perform(put(CONTROLLER_PATH + osId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updateRequest)))
-                .andExpect(status().isOk());
+    private void forcarStatus(Long osId, StatusOrdemDeServico status) {
+        var os = osGateway.findOrdemDeServicoById(osId).orElseThrow();
+        os.setStatus(status);
+        osGateway.updateOrdemDeServico(os);
     }
 
     private Long getClienteId() {

@@ -267,7 +267,7 @@ Cria uma nova ordem de serviço vinculada ao cliente e ao veículo.
     "id": 1,
     "solicitacao": "Troca de pastilhas de freio dianteiras e alinhamento",
     "status": "RECEBIDA",
-    "orcamento": 0.0,
+    "valorTotal": 0.0,
     "cliente": {
       "id": 1,
       "nome": "Carlos Silva",
@@ -300,7 +300,7 @@ Lista o histórico e o status de todas as ordens de serviço de um cliente espec
       "id": 1,
       "solicitacao": "Troca de pastilhas de freio dianteiras e alinhamento",
       "status": "RECEBIDA",
-      "orcamento": 0.0,
+      "valorTotal": 0.0,
       "cliente": {
         "id": 1,
         "nome": "Carlos Silva"

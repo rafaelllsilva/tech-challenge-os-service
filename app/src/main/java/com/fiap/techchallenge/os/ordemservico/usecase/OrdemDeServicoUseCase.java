@@ -3,7 +3,6 @@ package com.fiap.techchallenge.os.ordemservico.usecase;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.TransicaoDeStatusDTO;
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 
-import java.math.BigDecimal;
 import java.util.*;
 
 public interface OrdemDeServicoUseCase {
@@ -18,7 +17,7 @@ public interface OrdemDeServicoUseCase {
 
     OrdemDeServico createOrdemDeServico(String solicitacao, Long idCliente, Long idVeiculo);
 
-    OrdemDeServico updateOrdemDeServico(Long id, BigDecimal orcamento, String status);
+    OrdemDeServico updateOrdemDeServico(Long id, String solicitacao);
 
     OrdemDeServico deleteOrdemDeServico(Long id);
 

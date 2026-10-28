@@ -33,7 +33,7 @@ public class OrdemDeServicoGatewayImplTest {
         os.setId(id);
         os.setStatus(status);
         os.setSolicitacao("Problema nos freios.");
-        os.setOrcamento(BigDecimal.valueOf(100));
+        os.setValorTotal(BigDecimal.valueOf(100));
         return os;
     }
 
@@ -45,7 +45,7 @@ public class OrdemDeServicoGatewayImplTest {
         osEntity.setId(1L);
         osEntity.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntity.setSolicitacao("Problema nos freios.");
-        osEntity.setOrcamento(BigDecimal.valueOf(100));
+        osEntity.setValorTotal(BigDecimal.valueOf(100));
 
         when(repository.findAll()).thenReturn(List.of(osEntity));
 
@@ -73,19 +73,19 @@ public class OrdemDeServicoGatewayImplTest {
         osEntity1.setId(1L);
         osEntity1.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntity1.setSolicitacao("Problema nos freios.");
-        osEntity1.setOrcamento(BigDecimal.valueOf(100));
+        osEntity1.setValorTotal(BigDecimal.valueOf(100));
 
         var osEntity2 = new OrdemDeServicoEntity();
         osEntity2.setId(2L);
         osEntity2.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
         osEntity2.setSolicitacao("Problema nos freios.");
-        osEntity2.setOrcamento(BigDecimal.valueOf(100));
+        osEntity2.setValorTotal(BigDecimal.valueOf(100));
 
         var osEntity3 = new OrdemDeServicoEntity();
         osEntity3.setId(3L);
         osEntity3.setStatus(StatusOrdemDeServico.APROVADA);
         osEntity3.setSolicitacao("Problema nos freios.");
-        osEntity3.setOrcamento(BigDecimal.valueOf(100));
+        osEntity3.setValorTotal(BigDecimal.valueOf(100));
 
         when(repository.findAll()).thenReturn(List.of(osEntity1, osEntity2, osEntity3));
 
@@ -106,7 +106,7 @@ public class OrdemDeServicoGatewayImplTest {
         osEntity.setId(1L);
         osEntity.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntity.setSolicitacao("Problema nos freios.");
-        osEntity.setOrcamento(BigDecimal.valueOf(100));
+        osEntity.setValorTotal(BigDecimal.valueOf(100));
 
         when(repository.findById(1L)).thenReturn(Optional.of(osEntity));
 
@@ -134,7 +134,7 @@ public class OrdemDeServicoGatewayImplTest {
         osEntity.setId(1L);
         osEntity.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntity.setSolicitacao("Problema nos freios.");
-        osEntity.setOrcamento(BigDecimal.valueOf(100));
+        osEntity.setValorTotal(BigDecimal.valueOf(100));
 
         when(repository.findAllByClienteId(456L)).thenReturn(List.of(osEntity));
 
@@ -160,13 +160,13 @@ public class OrdemDeServicoGatewayImplTest {
         osEntity1.setId(1L);
         osEntity1.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntity1.setSolicitacao("Problema nos freios.");
-        osEntity1.setOrcamento(BigDecimal.valueOf(100));
+        osEntity1.setValorTotal(BigDecimal.valueOf(100));
 
         var osEntity2 = new OrdemDeServicoEntity();
         osEntity2.setId(2L);
         osEntity2.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
         osEntity2.setSolicitacao("Problema nos freios.");
-        osEntity2.setOrcamento(BigDecimal.valueOf(100));
+        osEntity2.setValorTotal(BigDecimal.valueOf(100));
 
         when(repository.findAllByClienteId(456L)).thenReturn(List.of(osEntity1, osEntity2));
 
@@ -185,7 +185,7 @@ public class OrdemDeServicoGatewayImplTest {
         osEntity.setId(1L);
         osEntity.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntity.setSolicitacao("Problema nos freios.");
-        osEntity.setOrcamento(BigDecimal.valueOf(100));
+        osEntity.setValorTotal(BigDecimal.valueOf(100));
 
         when(repository.findAllByVeiculoId(123L)).thenReturn(List.of(osEntity));
 
@@ -211,13 +211,13 @@ public class OrdemDeServicoGatewayImplTest {
         osEntity1.setId(1L);
         osEntity1.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntity1.setSolicitacao("Problema nos freios.");
-        osEntity1.setOrcamento(BigDecimal.valueOf(100));
+        osEntity1.setValorTotal(BigDecimal.valueOf(100));
 
         var osEntity2 = new OrdemDeServicoEntity();
         osEntity2.setId(2L);
         osEntity2.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
         osEntity2.setSolicitacao("Problema nos freios.");
-        osEntity2.setOrcamento(BigDecimal.valueOf(100));
+        osEntity2.setValorTotal(BigDecimal.valueOf(100));
 
         when(repository.findAllByVeiculoId(123L)).thenReturn(List.of(osEntity1, osEntity2));
 
@@ -235,13 +235,13 @@ public class OrdemDeServicoGatewayImplTest {
         var os = new OrdemDeServico();
         os.setStatus(StatusOrdemDeServico.RECEBIDA);
         os.setSolicitacao("Problema nos freios.");
-        os.setOrcamento(BigDecimal.valueOf(100));
+        os.setValorTotal(BigDecimal.valueOf(100));
 
         var osEntitySalva = new OrdemDeServicoEntity();
         osEntitySalva.setId(1L);
         osEntitySalva.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntitySalva.setSolicitacao("Problema nos freios.");
-        osEntitySalva.setOrcamento(BigDecimal.valueOf(100));
+        osEntitySalva.setValorTotal(BigDecimal.valueOf(100));
 
         when(repository.save(any(OrdemDeServicoEntity.class))).thenReturn(osEntitySalva);
 
@@ -259,19 +259,19 @@ public class OrdemDeServicoGatewayImplTest {
         var os = new OrdemDeServico();
         os.setStatus(StatusOrdemDeServico.RECEBIDA);
         os.setSolicitacao("Problema nos freios.");
-        os.setOrcamento(BigDecimal.valueOf(500));
+        os.setValorTotal(BigDecimal.valueOf(500));
 
         var osEntitySalva = new OrdemDeServicoEntity();
         osEntitySalva.setId(1L);
         osEntitySalva.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntitySalva.setSolicitacao("Problema nos freios.");
-        osEntitySalva.setOrcamento(BigDecimal.valueOf(500));
+        osEntitySalva.setValorTotal(BigDecimal.valueOf(500));
 
         when(repository.save(any(OrdemDeServicoEntity.class))).thenReturn(osEntitySalva);
 
         var resultado = gateway.saveOrdemDeServico(os);
 
-        assertEquals(BigDecimal.valueOf(500), resultado.getOrcamento());
+        assertEquals(BigDecimal.valueOf(500), resultado.getValorTotal());
     }
 
     @Test
@@ -289,19 +289,19 @@ public class OrdemDeServicoGatewayImplTest {
         os.setId(1L);
         os.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
         os.setSolicitacao("Problema nos freios.");
-        os.setOrcamento(BigDecimal.valueOf(250));
+        os.setValorTotal(BigDecimal.valueOf(250));
 
         var osEntityExistente = new OrdemDeServicoEntity();
         osEntityExistente.setId(1L);
         osEntityExistente.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntityExistente.setSolicitacao("Problema nos freios.");
-        osEntityExistente.setOrcamento(BigDecimal.valueOf(100));
+        osEntityExistente.setValorTotal(BigDecimal.valueOf(100));
 
         var osEntityAtualizada = new OrdemDeServicoEntity();
         osEntityAtualizada.setId(1L);
         osEntityAtualizada.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
         osEntityAtualizada.setSolicitacao("Problema nos freios.");
-        osEntityAtualizada.setOrcamento(BigDecimal.valueOf(250));
+        osEntityAtualizada.setValorTotal(BigDecimal.valueOf(250));
 
         when(repository.findById(1L)).thenReturn(Optional.of(osEntityExistente));
         when(repository.save(any(OrdemDeServicoEntity.class))).thenReturn(osEntityAtualizada);
@@ -311,7 +311,7 @@ public class OrdemDeServicoGatewayImplTest {
         assertNotNull(resultado);
         assertEquals(1L, resultado.getId());
         assertEquals(StatusOrdemDeServico.EM_DIAGNOSTICO, resultado.getStatus());
-        assertEquals(BigDecimal.valueOf(250), resultado.getOrcamento());
+        assertEquals(BigDecimal.valueOf(250), resultado.getValorTotal());
         verify(repository).save(any(OrdemDeServicoEntity.class));
     }
 
@@ -340,13 +340,13 @@ public class OrdemDeServicoGatewayImplTest {
         os.setId(1L);
         os.setStatus(StatusOrdemDeServico.RECEBIDA);
         os.setSolicitacao("Problema nos freios.");
-        os.setOrcamento(BigDecimal.valueOf(100));
+        os.setValorTotal(BigDecimal.valueOf(100));
 
         var osEntity = new OrdemDeServicoEntity();
         osEntity.setId(1L);
         osEntity.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntity.setSolicitacao("Problema nos freios.");
-        osEntity.setOrcamento(BigDecimal.valueOf(100));
+        osEntity.setValorTotal(BigDecimal.valueOf(100));
 
         when(repository.findById(1L)).thenReturn(Optional.of(osEntity));
 
@@ -384,14 +384,14 @@ public class OrdemDeServicoGatewayImplTest {
         osEntity.setId(1L);
         osEntity.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntity.setSolicitacao("Problema nos freios.");
-        osEntity.setOrcamento(BigDecimal.valueOf(100));
+        osEntity.setValorTotal(BigDecimal.valueOf(100));
 
         var resultado = OrdemDeServicoGatewayImpl.toDomain(osEntity);
 
         assertNotNull(resultado);
         assertEquals(1L, resultado.getId());
         assertEquals(StatusOrdemDeServico.RECEBIDA, resultado.getStatus());
-        assertEquals(BigDecimal.valueOf(100), resultado.getOrcamento());
+        assertEquals(BigDecimal.valueOf(100), resultado.getValorTotal());
         assertEquals("Problema nos freios.", resultado.getSolicitacao());
     }
 
@@ -408,7 +408,7 @@ public class OrdemDeServicoGatewayImplTest {
         osEntity.setId(1L);
         osEntity.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntity.setSolicitacao("Problema nos freios.");
-        osEntity.setOrcamento(BigDecimal.valueOf(100));
+        osEntity.setValorTotal(BigDecimal.valueOf(100));
         osEntity.setCliente(null);
 
         var resultado = OrdemDeServicoGatewayImpl.toDomain(osEntity);
@@ -423,7 +423,7 @@ public class OrdemDeServicoGatewayImplTest {
         osEntity.setId(1L);
         osEntity.setStatus(StatusOrdemDeServico.RECEBIDA);
         osEntity.setSolicitacao("Problema nos freios.");
-        osEntity.setOrcamento(BigDecimal.valueOf(100));
+        osEntity.setValorTotal(BigDecimal.valueOf(100));
         osEntity.setVeiculo(null);
 
         var resultado = OrdemDeServicoGatewayImpl.toDomain(osEntity);
@@ -443,7 +443,7 @@ public class OrdemDeServicoGatewayImplTest {
         assertNotNull(resultado);
         assertEquals(1L, resultado.getId());
         assertEquals(StatusOrdemDeServico.RECEBIDA, resultado.getStatus());
-        assertEquals(BigDecimal.valueOf(100), resultado.getOrcamento());
+        assertEquals(BigDecimal.valueOf(100), resultado.getValorTotal());
         assertEquals("Problema nos freios.", resultado.getSolicitacao());
     }
 

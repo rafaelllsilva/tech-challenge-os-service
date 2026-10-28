@@ -17,7 +17,8 @@ import java.time.LocalDateTime;
 public class OrdemDeServicoResponse {
     private Long id;
     private String status;
-    private BigDecimal orcamento;
+    private String orcamentoId;
+    private BigDecimal valorTotal;
     private String solicitacao;
     private LocalDateTime dataHoraCriacao;
     private ClienteResponse cliente;

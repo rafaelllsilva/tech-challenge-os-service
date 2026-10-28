@@ -129,7 +129,7 @@ public class OrdemDeServicoController {
             @ApiResponse(responseCode = "400", description = "Dados inválidos para atualização", content = @Content)
     })
     public ResponseEntity<OrdemDeServicoResponse> updateOrdemDeServico(@PathVariable Long id, @RequestBody UpdateOrdemDeServicoRequest request) {
-        var os = this.osUseCase.updateOrdemDeServico(id, request.getOrcamento(), request.getStatus() != null ? request.getStatus().toString() : null);
+        var os = this.osUseCase.updateOrdemDeServico(id, request.getSolicitacao());
         return os != null ? ResponseEntity.ok(osMapper.toResponse(os)) : ResponseEntity.notFound().build();
     }
 
@@ -190,7 +190,7 @@ public class OrdemDeServicoController {
                                                                         @RequestBody @Valid WebhookAprovacaoRequest request,
                                                                         @RequestHeader(value = "X-Webhook-Secret", required = false) String secret) {
         validarSegredoDoWebhook(secret);
-        var novoStatus = request.getAprovado() ? StatusOrdemDeServico.APROVADA : StatusOrdemDeServico.FINALIZADA;
+        var novoStatus = request.getAprovado() ? StatusOrdemDeServico.AGUARDANDO_PAGAMENTO : StatusOrdemDeServico.CANCELADA;
         var resultado = this.osUseCase.mudarParaStatus(id, novoStatus.toString());
         return resultado.isSucesso() ? ResponseEntity.ok(resultado) : ResponseEntity.badRequest().body(resultado);
     }

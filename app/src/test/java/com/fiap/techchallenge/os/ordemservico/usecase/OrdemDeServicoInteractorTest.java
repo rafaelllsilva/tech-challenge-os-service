@@ -68,7 +68,7 @@ public class OrdemDeServicoInteractorTest {
         os.setId(id);
         os.setStatus(status);
         os.setSolicitacao("Problema nos freios.");
-        os.setOrcamento(BigDecimal.valueOf(100));
+        os.setValorTotal(BigDecimal.valueOf(100));
         os.setVeiculo(veiculo);
         os.setCliente(cliente);
         return os;
@@ -246,64 +246,49 @@ public class OrdemDeServicoInteractorTest {
         verify(eventLogger).registrarFalhaProcessamento(null, "creation", "UNEXPECTED_ERROR", Instant.parse("2026-08-29T12:00:00Z"), true);
     }
 
-    // #################### updateOrdemDeServico(Long id, UpdateOrdemDeServicoRequest) ####################
+    // #################### updateOrdemDeServico(Long id, String solicitacao) ####################
 
     @Test
-    public void given_ordemExiste_when_atualizaOrdem_then_retornaOrdemAtualizada() {
-        var request = new UpdateOrdemDeServicoRequest();
-        request.setOrcamento(BigDecimal.valueOf(500));
-
+    public void given_ordemExiste_when_atualizaOrdem_then_atualizaSolicitacao() {
         var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
         when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
 
-        var resultado = osUseCase.updateOrdemDeServico(1L, request.getOrcamento(), null);
+        var resultado = osUseCase.updateOrdemDeServico(1L, "Troca de óleo.");
 
         assertNotNull(resultado);
-        assertEquals(1L, resultado.getId());
+        assertEquals("Troca de óleo.", resultado.getSolicitacao());
+        assertEquals(StatusOrdemDeServico.RECEBIDA, resultado.getStatus());
         verify(osGateway).updateOrdemDeServico(any());
+        verify(historicoStatusOrdemDeServicoGateway, never()).registrarStatus(any(), any(), any());
     }
 
     @Test
-    public void given_transicaoDeStatusValida_when_atualizaOrdem_then_retornaOrdemComStatusAtualizado() {
-        var request = new UpdateOrdemDeServicoRequest();
-        request.setStatus(StatusOrdemDeServico.EM_DIAGNOSTICO);
-
+    public void given_solicitacaoNula_when_atualizaOrdem_then_mantemSolicitacaoAtual() {
         var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
         when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
 
-        var resultado = osUseCase.updateOrdemDeServico(1L, request.getOrcamento(), request.getStatus().toString());
+        var resultado = osUseCase.updateOrdemDeServico(1L, null);
 
-        assertNotNull(resultado);
-        verify(osGateway).updateOrdemDeServico(any());
-        verify(eventLogger).registrarStatusAlterado(1L, StatusOrdemDeServico.RECEBIDA, StatusOrdemDeServico.EM_DIAGNOSTICO,
-                3_600_000L, Instant.parse("2026-08-29T12:00:00Z"));
-        verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.EM_DIAGNOSTICO, Instant.parse("2026-08-29T12:00:00Z"));
-    }
-
-    @Test
-    public void given_transicaoDeStatusInvalida_when_atualizaOrdem_then_jogaExcecao() {
-        var request = new UpdateOrdemDeServicoRequest();
-        request.setStatus(StatusOrdemDeServico.FINALIZADA);
-
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
-        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
-
-        assertThrows(BadRequestException.class, () -> osUseCase.updateOrdemDeServico(1L, request.getOrcamento(), request.getStatus().toString()));
-        verify(osGateway, never()).saveOrdemDeServico(any());
-        verify(eventLogger).registrarFalhaProcessamento(1L, "status_transition", "INVALID_STATUS_TRANSITION", Instant.parse("2026-08-29T12:00:00Z"), false);
+        assertEquals("Problema nos freios.", resultado.getSolicitacao());
     }
 
     @Test
     public void given_ordemNaoExiste_when_atualizaOrdem_then_jogaExcecao() {
-        var request = new UpdateOrdemDeServicoRequest();
-        request.setOrcamento(BigDecimal.valueOf(500));
-
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.empty());
 
-        assertThrows(BadRequestException.class, () -> osUseCase.updateOrdemDeServico(1L, request.getOrcamento(), null));
+        assertThrows(BadRequestException.class, () -> osUseCase.updateOrdemDeServico(1L, "Troca de óleo."));
         verify(osGateway, never()).updateOrdemDeServico(any());
+        verify(eventLogger).registrarFalhaProcessamento(1L, "update", "ORDER_NOT_FOUND", Instant.parse("2026-08-29T12:00:00Z"), false);
+    }
+
+    @Test
+    public void given_erroInesperado_when_atualizaOrdem_then_registraFalhaERepropaga() {
+        when(osGateway.findOrdemDeServicoById(1L)).thenThrow(new IllegalStateException("boom"));
+
+        assertThrows(IllegalStateException.class, () -> osUseCase.updateOrdemDeServico(1L, "x"));
+        verify(eventLogger).registrarFalhaProcessamento(1L, "update", "UNEXPECTED_ERROR", Instant.parse("2026-08-29T12:00:00Z"), true);
     }
 
     // #################### deleteOrdemDeServico(Long id) ####################
@@ -336,13 +321,13 @@ public class OrdemDeServicoInteractorTest {
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
         when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
 
-        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.EM_DIAGNOSTICO.toString());
+        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.CANCELADA.toString());
 
         assertTrue(resultado.isSucesso());
-        assertTrue(resultado.getMensagem().contains("EM_DIAGNOSTICO"));
+        assertTrue(resultado.getMensagem().contains("CANCELADA"));
         verify(osGateway).updateOrdemDeServico(any());
-        verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.EM_DIAGNOSTICO, Instant.parse("2026-08-29T12:00:00Z"));
-        verify(eventLogger).registrarStatusAlterado(1L, StatusOrdemDeServico.RECEBIDA, StatusOrdemDeServico.EM_DIAGNOSTICO,
+        verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.CANCELADA, Instant.parse("2026-08-29T12:00:00Z"));
+        verify(eventLogger).registrarStatusAlterado(1L, StatusOrdemDeServico.RECEBIDA, StatusOrdemDeServico.CANCELADA,
                 3_600_000L, Instant.parse("2026-08-29T12:00:00Z"));
     }
 
@@ -359,12 +344,12 @@ public class OrdemDeServicoInteractorTest {
     }
 
     @Test
-    public void given_transicaoParaAprovada_when_mudaParaStatus_then_retornaSucessoComEmailRecebido() {
+    public void given_transicaoParaAguardandoPagamento_when_mudaParaStatus_then_retornaSucessoComEmailRecebido() {
         var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_APROVACAO);
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
         when(osGateway.updateOrdemDeServico(any())).thenReturn(os);
 
-        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.APROVADA.toString());
+        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.AGUARDANDO_PAGAMENTO.toString());
 
         assertTrue(resultado.isSucesso());
         assertTrue(resultado.getMensagem().contains("Email com a aprovação"));
@@ -399,7 +384,7 @@ public class OrdemDeServicoInteractorTest {
         var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
 
-        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.AGUARDANDO_APROVACAO.toString());
+        var resultado = osUseCase.mudarParaStatus(1L, StatusOrdemDeServico.APROVADA.toString());
 
         assertFalse(resultado.isSucesso());
         verify(osGateway, never()).updateOrdemDeServico(any());

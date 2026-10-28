@@ -22,7 +22,8 @@ public class OrdemDeServicoMapper {
         return OrdemDeServicoResponse.builder()
                 .id(os.getId())
                 .status(os.getStatus().name())
-                .orcamento(os.getOrcamento())
+                .orcamentoId(os.getOrcamentoId())
+                .valorTotal(os.getValorTotal())
                 .solicitacao(os.getSolicitacao())
                 .dataHoraCriacao(os.getDataHoraCriacao())
                 .cliente(clienteMapper.toResponse(os.getCliente()))
@@ -34,7 +35,7 @@ public class OrdemDeServicoMapper {
         return OrdemDeServicoSimplesResponse.builder()
                 .id(os.getId())
                 .status(os.getStatus().name())
-                .orcamento(os.getOrcamento())
+                .valorTotal(os.getValorTotal())
                 .solicitacao(os.getSolicitacao())
                 .dataHoraCriacao(os.getDataHoraCriacao())
                 .build();
