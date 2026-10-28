@@ -1,5 +1,6 @@
 package com.fiap.techchallenge.os.ordemservico.adapter.gateway;
 
+import com.fiap.techchallenge.os.ordemservico.domain.ItemHistorico;
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.framework.persistence.OrdemDeServicoStatusHistoricoEntity;
 import com.fiap.techchallenge.os.ordemservico.framework.persistence.OrdemDeServicoStatusHistoricoRepository;
@@ -7,6 +8,7 @@ import com.fiap.techchallenge.os.ordemservico.usecase.HistoricoStatusOrdemDeServ
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -31,5 +33,13 @@ public class HistoricoStatusOrdemDeServicoGatewayImpl implements HistoricoStatus
     public Optional<Instant> buscarInicioDoStatusAtual(Long idOrdemDeServico) {
         return repository.findTopByIdOrdemDeServicoOrderByAlteradoEmDescIdDesc(idOrdemDeServico)
                 .map(OrdemDeServicoStatusHistoricoEntity::getAlteradoEm);
+    }
+
+    @Override
+    public List<ItemHistorico> listarPorOrdemDeServico(Long idOrdemDeServico) {
+        return repository.findByIdOrdemDeServico(idOrdemDeServico).stream()
+                .map(h -> new ItemHistorico(ItemHistorico.TipoItemHistorico.STATUS, h.getStatus().name(),
+                        h.getAlteradoEm(), null, null))
+                .toList();
     }
 }

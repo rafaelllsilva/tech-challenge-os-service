@@ -363,6 +363,31 @@ public class OrdemDeServicoControllerTest {
                 .andExpect(jsonPath("$.sucesso").value(false));
     }
 
+    // GET {id}/historico
+
+    @Test
+    public void given_osExiste_when_historico_then_retornaListaMapeada() throws Exception {
+        var item = new com.fiap.techchallenge.os.ordemservico.domain.ItemHistorico(
+                com.fiap.techchallenge.os.ordemservico.domain.ItemHistorico.TipoItemHistorico.STATUS,
+                "RECEBIDA", java.time.Instant.parse("2026-01-01T10:00:00Z"), null, null);
+        when(osUseCase.consultarHistorico(1L)).thenReturn(List.of(item));
+        when(osMapper.toHistoricoResponse(item)).thenReturn(HistoricoOrdemDeServicoResponse.builder()
+                .tipo("STATUS").nome("RECEBIDA").ocorridoEm(item.ocorridoEm()).build());
+
+        mockMvc.perform(get(CONTROLLER_PATH + "{id}/historico", 1L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].tipo").value("STATUS"))
+                .andExpect(jsonPath("$[0].nome").value("RECEBIDA"));
+    }
+
+    @Test
+    public void given_osInexistente_when_historico_then_retorna404() throws Exception {
+        when(osUseCase.consultarHistorico(9L)).thenThrow(new NotFoundException("não existe"));
+
+        mockMvc.perform(get(CONTROLLER_PATH + "{id}/historico", 9L))
+                .andExpect(status().isNotFound());
+    }
+
     // GET /cliente/{clienteId}/ordens
 
     @Test

@@ -3,6 +3,8 @@ package com.fiap.techchallenge.os.ordemservico.usecase;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.TransicaoDeStatusDTO;
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 
+import com.fiap.techchallenge.os.ordemservico.domain.ItemHistorico;
+
 import java.math.BigDecimal;
 import java.util.*;
 
@@ -32,6 +34,9 @@ public interface OrdemDeServicoUseCase {
     OrdemDeServico cancelarOrdemDeServico(Long id, String motivo);
 
     TransicaoDeStatusDTO entregar(Long id);
+
+    /** Linha do tempo da OS (status e eventos da saga) em ordem cronológica. */
+    List<ItemHistorico> consultarHistorico(Long id);
 
     // Reações aos eventos do billing (saga). OS inexistente é logada e ignorada.
 

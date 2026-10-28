@@ -5,6 +5,8 @@ import com.fiap.techchallenge.os.cliente.domain.TipoPessoa;
 import com.fiap.techchallenge.os.cliente.usecase.ClienteGateway;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.CreateOrdemDeServicoRequest;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.UpdateOrdemDeServicoRequest;
+import com.fiap.techchallenge.os.ordemservico.domain.ItemHistorico;
+import com.fiap.techchallenge.os.ordemservico.domain.ItemHistorico.TipoItemHistorico;
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
@@ -57,6 +59,12 @@ public class OrdemDeServicoInteractorTest {
 
     @Mock
     private PublicadorDeEventos publicadorDeEventos;
+
+    @Mock
+    private EventosPublicadosGateway eventosPublicadosGateway;
+
+    @Mock
+    private EventosRecebidosGateway eventosRecebidosGateway;
 
     @Mock
     private HistoricoStatusOrdemDeServicoGateway historicoStatusOrdemDeServicoGateway;
@@ -698,5 +706,39 @@ public class OrdemDeServicoInteractorTest {
 
         assertEquals(StatusOrdemDeServico.RECEBIDA, os.getStatus());
         verify(osGateway, never()).updateOrdemDeServico(any());
+    }
+
+    // #################### consultarHistorico ####################
+
+    @Test
+    public void given_tresFontes_when_consultarHistorico_then_mesclaEOrdenaPorData() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_APROVACAO);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+        var t0 = Instant.parse("2026-01-01T10:00:00Z");
+        var evento1 = java.util.UUID.randomUUID();
+        var evento2 = java.util.UUID.randomUUID();
+        when(historicoStatusOrdemDeServicoGateway.listarPorOrdemDeServico(1L)).thenReturn(List.of(
+                new ItemHistorico(TipoItemHistorico.STATUS, "AGUARDANDO_APROVACAO", t0.plusSeconds(30), null, null),
+                new ItemHistorico(TipoItemHistorico.STATUS, "RECEBIDA", t0, null, null)));
+        when(eventosPublicadosGateway.listarPorOrdemDeServico(1L)).thenReturn(List.of(
+                new ItemHistorico(TipoItemHistorico.EVENTO_PUBLICADO, "OS_CRIADA", t0, evento1, "{}")));
+        when(eventosRecebidosGateway.listarPorOrdemDeServico(1L)).thenReturn(List.of(
+                new ItemHistorico(TipoItemHistorico.EVENTO_RECEBIDO, "ORCAMENTO_GERADO", t0.plusSeconds(20), evento2, "{}")));
+
+        var historico = osUseCase.consultarHistorico(1L);
+
+        assertEquals(List.of("RECEBIDA", "OS_CRIADA", "ORCAMENTO_GERADO", "AGUARDANDO_APROVACAO"),
+                historico.stream().map(ItemHistorico::nome).toList());
+        assertEquals(List.of(TipoItemHistorico.STATUS, TipoItemHistorico.EVENTO_PUBLICADO,
+                        TipoItemHistorico.EVENTO_RECEBIDO, TipoItemHistorico.STATUS),
+                historico.stream().map(ItemHistorico::tipo).toList());
+    }
+
+    @Test
+    public void given_osInexistente_when_consultarHistorico_then_jogaNotFound() {
+        when(osGateway.findOrdemDeServicoById(9L)).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> osUseCase.consultarHistorico(9L));
+        verifyNoInteractions(eventosPublicadosGateway, eventosRecebidosGateway);
     }
 }

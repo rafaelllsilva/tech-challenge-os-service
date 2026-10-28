@@ -7,6 +7,7 @@ import com.fiap.techchallenge.os.usuario.domain.Role;
 import com.fiap.techchallenge.os.usuario.domain.Usuario;
 import com.fiap.techchallenge.os.ordemservico.usecase.OrdemDeServicoUseCase;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -78,6 +79,18 @@ public class OrdemDeServicoController {
         var os = this.osUseCase.getOrdemDeServico(id);
         var dto = os.map(osMapper::toResponse).orElse(null);
         return dto != null ? ResponseEntity.ok(dto) : ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("{id}/historico")
+    @Operation(summary = "Histórico da ordem de serviço", description = "Retorna a linha do tempo da OS em ordem cronológica: mudanças de status e eventos da saga publicados e recebidos")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Histórico encontrado",
+                    content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = HistoricoOrdemDeServicoResponse.class)))),
+            @ApiResponse(responseCode = "404", description = "Ordem de serviço não encontrada", content = @Content)
+    })
+    public ResponseEntity<List<HistoricoOrdemDeServicoResponse>> getHistoricoDaOrdemDeServico(@PathVariable Long id) {
+        var itens = this.osUseCase.consultarHistorico(id);
+        return ResponseEntity.ok(itens.stream().map(osMapper::toHistoricoResponse).toList());
     }
 
     @GetMapping("cliente/{clienteId}/ordens")

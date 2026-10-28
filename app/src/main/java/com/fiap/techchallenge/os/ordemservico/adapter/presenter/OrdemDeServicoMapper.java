@@ -2,6 +2,8 @@ package com.fiap.techchallenge.os.ordemservico.adapter.presenter;
 
 import com.fiap.techchallenge.os.cliente.adapter.controller.ClienteMapper;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.OrdemDeServicoSimplesResponse;
+import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.HistoricoOrdemDeServicoResponse;
+import com.fiap.techchallenge.os.ordemservico.domain.ItemHistorico;
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.OrdemDeServicoResponse;
 import com.fiap.techchallenge.os.veiculo.adapter.controller.VeiculoWebMapper;
@@ -38,6 +40,16 @@ public class OrdemDeServicoMapper {
                 .valorTotal(os.getValorTotal())
                 .solicitacao(os.getSolicitacao())
                 .dataHoraCriacao(os.getDataHoraCriacao())
+                .build();
+    }
+
+    public HistoricoOrdemDeServicoResponse toHistoricoResponse(ItemHistorico item) {
+        return HistoricoOrdemDeServicoResponse.builder()
+                .tipo(item.tipo().name())
+                .nome(item.nome())
+                .ocorridoEm(item.ocorridoEm())
+                .eventId(item.eventId())
+                .detalhes(item.detalhes())
                 .build();
     }
 }

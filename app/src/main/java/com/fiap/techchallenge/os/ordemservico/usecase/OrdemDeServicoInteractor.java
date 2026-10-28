@@ -5,6 +5,7 @@ import com.fiap.techchallenge.os.cliente.usecase.ClienteGateway;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.TransicaoDeStatusDTO;
 import com.fiap.techchallenge.os.exception.BadRequestException;
 import com.fiap.techchallenge.os.exception.NotFoundException;
+import com.fiap.techchallenge.os.ordemservico.domain.ItemHistorico;
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
@@ -41,6 +42,8 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
     private final ClienteGateway clienteGateway;
     private final VeiculoGateway veiculoGateway;
     private final HistoricoStatusOrdemDeServicoGateway historicoStatusOrdemDeServicoGateway;
+    private final EventosPublicadosGateway eventosPublicadosGateway;
+    private final EventosRecebidosGateway eventosRecebidosGateway;
     private final OrdemDeServicoEventLogger loggerEventos;
     private final PublicadorDeEventos publicadorDeEventos;
     private final Clock clock;
@@ -50,11 +53,14 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
             OrdemDeServicoGateway osGateway,
             ClienteGateway clienteGateway, VeiculoGateway veiculoGateway,
             HistoricoStatusOrdemDeServicoGateway historicoStatusOrdemDeServicoGateway,
+            EventosPublicadosGateway eventosPublicadosGateway, EventosRecebidosGateway eventosRecebidosGateway,
             OrdemDeServicoEventLogger loggerEventos, PublicadorDeEventos publicadorDeEventos, Clock clock) {
         this.osGateway = osGateway;
         this.clienteGateway = clienteGateway;
         this.veiculoGateway = veiculoGateway;
         this.historicoStatusOrdemDeServicoGateway = historicoStatusOrdemDeServicoGateway;
+        this.eventosPublicadosGateway = eventosPublicadosGateway;
+        this.eventosRecebidosGateway = eventosRecebidosGateway;
         this.loggerEventos = loggerEventos;
         this.publicadorDeEventos = publicadorDeEventos;
         this.clock = clock;
@@ -219,6 +225,21 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
             return new TransicaoDeStatusDTO(false, ex.getMessage());
         }
         return new TransicaoDeStatusDTO(true, "A Ordem de Serviço %d mudou para '%s'".formatted(id, os.getStatus()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ItemHistorico> consultarHistorico(Long id) {
+        if (this.osGateway.findOrdemDeServicoById(id).isEmpty()) {
+            throw new NotFoundException(getMensagemOsNaoExiste(id));
+        }
+        List<ItemHistorico> itens = new ArrayList<>();
+        itens.addAll(historicoStatusOrdemDeServicoGateway.listarPorOrdemDeServico(id));
+        itens.addAll(eventosPublicadosGateway.listarPorOrdemDeServico(id));
+        itens.addAll(eventosRecebidosGateway.listarPorOrdemDeServico(id));
+        // sort estável: em empate de instante, mantém status, depois publicados, depois recebidos
+        itens.sort(Comparator.comparing(ItemHistorico::ocorridoEm));
+        return itens;
     }
 
     private OrdemDeServico buscarOuFalhar(Long id) {
