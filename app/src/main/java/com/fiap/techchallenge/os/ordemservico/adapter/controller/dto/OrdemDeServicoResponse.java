@@ -1,0 +1,26 @@
+package com.fiap.techchallenge.os.ordemservico.adapter.controller.dto;
+
+import com.fiap.techchallenge.os.cliente.adapter.controller.dto.ClienteResponse;
+import com.fiap.techchallenge.os.veiculo.adapter.controller.dto.VeiculoResponse;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Builder
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class OrdemDeServicoResponse {
+    private Long id;
+    private String status;
+    private String orcamentoId;
+    private BigDecimal valorTotal;
+    private String solicitacao;
+    private LocalDateTime dataHoraCriacao;
+    private ClienteResponse cliente;
+    private VeiculoResponse veiculo;
+}

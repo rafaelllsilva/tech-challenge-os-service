@@ -1,0 +1,8 @@
+ALTER TABLE ordem_de_servico_status_historico
+RENAME COLUMN ordem_de_servico_id TO id_ordem_de_servico;
+
+ALTER TABLE ordem_de_servico_status_historico
+RENAME COLUMN changed_at TO alterado_em;
+
+ALTER INDEX idx_os_status_historico_ordem_changed_at
+RENAME TO idx_historico_status_ordem_alterado_em;

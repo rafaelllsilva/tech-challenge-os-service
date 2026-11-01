@@ -1,0 +1,6 @@
+ALTER TABLE ordem_de_servico_status_historico
+DROP CONSTRAINT ordem_de_servico_status_historico_ordem_de_servico_id_fkey;
+
+ALTER TABLE ordem_de_servico_status_historico
+ADD CONSTRAINT ordem_de_servico_status_historico_ordem_de_servico_id_fkey
+FOREIGN KEY (id_ordem_de_servico) REFERENCES ordem_de_servico(id) ON DELETE CASCADE;

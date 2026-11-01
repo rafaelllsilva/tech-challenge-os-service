@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: os-service-config
+  namespace: os-service
+data:
+  DB_NAME: "os_service"
+  SPRING_JPA_SHOW_SQL: "false"
+  SPRING_FLYWAY_ENABLED: "true"
+  SPRING_FLYWAY_SCHEMAS: "os"
+  SWAGGER_BASE_PATH: "/Prod"
+  # Mensageria (SNS/SQS). AWS_ACCOUNT_ID_PLACEHOLDER é substituído pelo deploy.yml.
+  AWS_REGION: "us-east-1"
+  OS_TOPICO_OS_EVENTS: "arn:aws:sns:us-east-1:AWS_ACCOUNT_ID_PLACEHOLDER:os-events"
+  OS_TOPICO_BILLING_EVENTS: "arn:aws:sns:us-east-1:AWS_ACCOUNT_ID_PLACEHOLDER:billing-events"
+  OS_TOPICO_EXECUTION_EVENTS: "arn:aws:sns:us-east-1:AWS_ACCOUNT_ID_PLACEHOLDER:execution-events"
+  OS_FILA_BILLING: "https://sqs.us-east-1.amazonaws.com/AWS_ACCOUNT_ID_PLACEHOLDER/os-service-billing-events"
+  OS_FILA_EXECUTION: "https://sqs.us-east-1.amazonaws.com/AWS_ACCOUNT_ID_PLACEHOLDER/os-service-execution-events"
+  OS_SAGA_PAGAMENTO_MAX_TENTATIVAS: "3"

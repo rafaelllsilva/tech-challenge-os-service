@@ -1,0 +1,883 @@
+{
+  "info": {
+    "_postman_id": "e0cdd24b-cc8e-4375-b9fc-7f3816b57d94",
+    "name": "Tech Challenge Fase 4 - OS Service",
+    "description": "Coleção do os-service (saga coreografada com SNS/SQS). Rode 'Login' primeiro.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwtToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Autenticação",
+      "description": "",
+      "item": [
+        {
+          "name": "Login (gerente)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/auth/login",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Retorna o JWT e o grava em {{jwtToken}}. Usuários do seed: gerente, atendente, mecanico (senha@123).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"gerente\",\n  \"senha\": \"senha@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.collectionVariables.set(\"jwtToken\", r.accessToken);",
+                  "pm.environment.set(\"jwtToken\", r.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar usuário (GERENTE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/auth/usuario",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "auth",
+                "usuario"
+              ]
+            },
+            "description": "Exige role GERENTE.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"atendente2\",\n  \"senha\": \"senha@123\",\n  \"role\": \"ATENDENTE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Clientes",
+      "description": "",
+      "item": [
+        {
+          "name": "Listar clientes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/cliente",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "cliente"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Buscar cliente por documento",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/cliente?documento=52998224725",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "cliente"
+              ],
+              "query": [
+                {
+                  "key": "documento",
+                  "value": "52998224725"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Buscar cliente por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/cliente/{{clienteId}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "cliente",
+                "{{clienteId}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Criar cliente (PF)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/cliente",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "cliente"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Maria Silva\",\n  \"tipoPessoa\": \"PF\",\n  \"documento\": \"52998224725\",\n  \"dataNascimento\": \"1990-05-15\",\n  \"email\": \"maria.silva@email.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Criar cliente (PJ)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/cliente",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "cliente"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Empresa XYZ Ltda\",\n  \"tipoPessoa\": \"PJ\",\n  \"documento\": \"11222333000181\",\n  \"email\": \"contato@empresaxyz.com.br\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Atualizar cliente",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/cliente/{{clienteId}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "cliente",
+                "{{clienteId}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Maria Souza\",\n  \"email\": \"maria.souza@email.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remover cliente",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/cliente/{{clienteId}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "cliente",
+                "{{clienteId}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Veículos",
+      "description": "",
+      "item": [
+        {
+          "name": "Listar veículos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/veiculo",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "veiculo"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Buscar veículo por placa",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/veiculo?placa=ABC-1234",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "veiculo"
+              ],
+              "query": [
+                {
+                  "key": "placa",
+                  "value": "ABC-1234"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Buscar veículo por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/veiculo/{{veiculoId}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "veiculo",
+                "{{veiculoId}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Criar veículo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/veiculo",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "veiculo"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"placa\": \"HHH-1234\",\n  \"marca\": \"KIWI\",\n  \"modelo\": \"ORANGE\",\n  \"ano\": 2020\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Atualizar veículo por ID",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/veiculo/{{veiculoId}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "veiculo",
+                "{{veiculoId}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"placa\": \"HJH-1234\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Atualizar veículo por placa",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/veiculo?placa=TUV4W56",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "veiculo"
+              ],
+              "query": [
+                {
+                  "key": "placa",
+                  "value": "TUV4W56"
+                }
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"marca\": \"BYD\",\n  \"modelo\": \"Dolphin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remover veículo por ID",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/veiculo/{{veiculoId}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "veiculo",
+                "{{veiculoId}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Remover veículo por placa",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/veiculo?placa=BRA2E19",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "veiculo"
+              ],
+              "query": [
+                {
+                  "key": "placa",
+                  "value": "BRA2E19"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Ordem de Serviço",
+      "description": "Orçamento, pagamento e execução avançam por eventos do billing e do execution (SNS/SQS), não por endpoints REST.",
+      "item": [
+        {
+          "name": "1. Abrir OS (publica OS_CRIADA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/ordemDeServico",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ordemDeServico"
+              ]
+            },
+            "description": "Cria a OS em RECEBIDA e publica OS_CRIADA via outbox. Grava o id em {{osId}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"solicitacao\": \"Troca de óleo e revisão de freios\",\n  \"idCliente\": \"{{clienteId}}\",\n  \"idVeiculo\": \"{{veiculoId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.collectionVariables.set(\"osId\", r.id);",
+                  "pm.environment.set(\"osId\", r.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar OS",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/ordemDeServico",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ordemDeServico"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "2. Consultar OS por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/ordemDeServico/{{osId}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ordemDeServico",
+                "{{osId}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "3. Histórico da OS (status e eventos)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/ordemDeServico/{{osId}}/historico",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ordemDeServico",
+                "{{osId}}",
+                "historico"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "\"Linha do tempo: status, eventos publicados e recebidos.\"",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar OS por cliente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/ordemDeServico/cliente/{{clienteId}}/ordens",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ordemDeServico",
+                "cliente",
+                "{{clienteId}}",
+                "ordens"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Listar OS por veículo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/ordemDeServico/veiculo/{{veiculoId}}/ordens",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ordemDeServico",
+                "veiculo",
+                "{{veiculoId}}",
+                "ordens"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Atualizar OS",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/ordemDeServico/{{osId}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ordemDeServico",
+                "{{osId}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"solicitacao\": \"Solicitação atualizada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4. Aprovar orçamento (webhook)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhookSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/ordemDeServico/{{osId}}/aprovacao",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ordemDeServico",
+                "{{osId}}",
+                "aprovacao"
+              ]
+            },
+            "description": "Exige o header X-Webhook-Secret. A OS deve estar em AGUARDANDO_APROVACAO (depois do ORCAMENTO_GERADO do billing). Publica ORCAMENTO_APROVADO.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aprovado\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4b. Rejeitar orçamento (webhook)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhookSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/ordemDeServico/{{osId}}/aprovacao",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ordemDeServico",
+                "{{osId}}",
+                "aprovacao"
+              ]
+            },
+            "description": "A OS vai para CANCELADA e ORCAMENTO_REJEITADO é publicado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aprovado\": false,\n  \"motivo\": \"Valor acima do esperado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "5. Cancelar OS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/ordemDeServico/{{osId}}/cancelar",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ordemDeServico",
+                "{{osId}}",
+                "cancelar"
+              ]
+            },
+            "description": "Publica OS_CANCELADA.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"motivo\": \"Cliente desistiu\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6. Entregar veículo (webhook)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhookSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/ordemDeServico/transicao/paraEntregue/{{osId}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ordemDeServico",
+                "transicao",
+                "paraEntregue",
+                "{{osId}}"
+              ]
+            },
+            "description": "A OS deve estar FINALIZADA. Exige X-Webhook-Secret.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remover OS",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/ordemDeServico/{{osId}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ordemDeServico",
+                "{{osId}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "clienteId",
+      "value": "1"
+    },
+    {
+      "key": "veiculoId",
+      "value": "1"
+    },
+    {
+      "key": "osId",
+      "value": "1"
+    },
+    {
+      "key": "jwtToken",
+      "value": ""
+    }
+  ]
+}

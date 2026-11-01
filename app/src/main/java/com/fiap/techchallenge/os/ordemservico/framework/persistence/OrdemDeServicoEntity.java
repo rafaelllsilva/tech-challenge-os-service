@@ -1,0 +1,52 @@
+package com.fiap.techchallenge.os.ordemservico.framework.persistence;
+
+import com.fiap.techchallenge.os.cliente.framework.persistence.ClienteEntity;
+import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
+import com.fiap.techchallenge.os.veiculo.framework.persistence.VeiculoEntity;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Entity
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Table(name = "ordem_de_servico")
+public class OrdemDeServicoEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id", columnDefinition = "serial")
+    private Long id;
+
+    @Enumerated(value = EnumType.STRING)
+    @Column(name = "status", columnDefinition = "varchar")
+    private StatusOrdemDeServico status;
+
+    @Column(name = "orcamento_id", length = 64)
+    private String orcamentoId;
+
+    @Column(name = "valor_total", columnDefinition = "numeric")
+    private BigDecimal valorTotal;
+
+    @Column(name = "tentativas_pagamento", nullable = false)
+    private int tentativasPagamento;
+
+    @Column(name = "solicitacao", columnDefinition = "varchar")
+    private String solicitacao;
+
+    @Column(name = "data_hora_criacao")
+    private LocalDateTime dataHoraCriacao;
+
+    @ManyToOne
+    @JoinColumn(name = "id_cliente")
+    private ClienteEntity cliente;
+
+    @ManyToOne
+    @JoinColumn(name = "id_veiculo")
+    private VeiculoEntity veiculo;
+}

@@ -1,0 +1,247 @@
+package com.fiap.techchallenge.os.ordemservico.adapter.controller;
+
+import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.*;
+import com.fiap.techchallenge.os.ordemservico.adapter.presenter.OrdemDeServicoMapper;
+import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
+import com.fiap.techchallenge.os.usuario.domain.Role;
+import com.fiap.techchallenge.os.usuario.domain.Usuario;
+import com.fiap.techchallenge.os.ordemservico.usecase.OrdemDeServicoUseCase;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.net.URI;
+import java.util.Collections;
+import java.util.List;
+
+@RestController
+@RequestMapping({ "/api/ordemDeServico", "/api/ordemDeServico/" })
+@Tag(name = "Ordens de Serviço", description = "Operações de criação, acompanhamento e transição de status das ordens de serviço")
+public class OrdemDeServicoController {
+
+    public static final String CONTROLLER_PATH = "/api/ordemDeServico/";
+
+    private final OrdemDeServicoMapper osMapper;
+    private final OrdemDeServicoUseCase osUseCase;
+    private final ListagemOrdemDeServicoComparator listagemOrdemDeServicoComparator;
+
+    @Value("${webhook.aprovacao-cliente.secret}")
+    private String webhookSecret;
+
+    @Autowired
+    public OrdemDeServicoController(OrdemDeServicoUseCase osService, OrdemDeServicoMapper osMapper, ListagemOrdemDeServicoComparator listagemOrdemDeServicoComparator) {
+        this.osUseCase = osService;
+        this.osMapper = osMapper;
+        this.listagemOrdemDeServicoComparator = listagemOrdemDeServicoComparator;
+    }
+
+    // CRUD
+    @GetMapping
+    @Operation(summary = "Listar ordens de serviço", description = "Retorna todas as ordens de serviço cadastradas")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Consulta realizada com sucesso")
+    })
+    public ResponseEntity<List<OrdemDeServicoSimplesResponse>> getAllOrdemDeServico() {
+        var ordens = this.osUseCase.getAllOrdemDeServico();
+        if (!ordens.isEmpty()) {
+            ordens = ordens.stream()
+                    .filter(os ->
+                                    !StatusOrdemDeServico.ENTREGUE.equals(os.getStatus())
+                                    && !StatusOrdemDeServico.FINALIZADA.equals(os.getStatus())
+                                    && !StatusOrdemDeServico.APROVADA.equals(os.getStatus())
+                    )
+                    .sorted(listagemOrdemDeServicoComparator)
+                    .toList();
+        }
+        return ResponseEntity.ok(!ordens.isEmpty() ? ordens.stream().map(osMapper::toSimplesResponse).toList() : Collections.emptyList());
+    }
+
+    @GetMapping("{id}")
+    @Operation(summary = "Buscar ordem de serviço por ID", description = "Retorna uma ordem de serviço específica pelo identificador")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ordem de serviço encontrada",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Ordem de serviço não encontrada", content = @Content)
+    })
+    public ResponseEntity<OrdemDeServicoResponse> getOrdemDeServicoById(@PathVariable Long id) {
+        var os = this.osUseCase.getOrdemDeServico(id);
+        var dto = os.map(osMapper::toResponse).orElse(null);
+        return dto != null ? ResponseEntity.ok(dto) : ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("{id}/historico")
+    @Operation(summary = "Histórico da ordem de serviço", description = "Retorna a linha do tempo da OS em ordem cronológica: mudanças de status e eventos da saga publicados e recebidos")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Histórico encontrado",
+                    content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = HistoricoOrdemDeServicoResponse.class)))),
+            @ApiResponse(responseCode = "404", description = "Ordem de serviço não encontrada", content = @Content)
+    })
+    public ResponseEntity<List<HistoricoOrdemDeServicoResponse>> getHistoricoDaOrdemDeServico(@PathVariable Long id) {
+        var itens = this.osUseCase.consultarHistorico(id);
+        return ResponseEntity.ok(itens.stream().map(osMapper::toHistoricoResponse).toList());
+    }
+
+    @GetMapping("cliente/{clienteId}/ordens")
+    @Operation(summary = "Buscar ordens de serviço por cliente", description = "Retorna as ordens de serviço associadas ao identificador do cliente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ordens de serviço encontradas",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Ordens de serviço não encontradas para o cliente informado", content = @Content)
+    })
+    public ResponseEntity<List<OrdemDeServicoResponse>> getOrdensDeServicoPorClienteId(@PathVariable Long clienteId,
+                                                                                       @AuthenticationPrincipal Usuario usuario) {
+        filtrarAcessoDoCliente(usuario, clienteId);
+        var ordens = this.osUseCase.getOrdensDeServicoPorClienteId(clienteId);
+        List<OrdemDeServicoResponse> dtoList = ordens != null && !ordens.isEmpty() ? ordens.stream().map(osMapper::toResponse).toList() : Collections.emptyList();
+        return !dtoList.isEmpty() ? ResponseEntity.ok(dtoList) : ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("veiculo/{veiculoId}/ordens")
+    @Operation(summary = "Buscar ordens de serviço por veículo", description = "Retorna as ordens de serviço associadas ao identificador do veículo")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ordens de serviço encontradas",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Ordens de serviço não encontradas para o veículo informado", content = @Content)
+    })
+    public ResponseEntity<List<OrdemDeServicoResponse>> getOrdensDeServicoPorVeiculoId(@PathVariable Long veiculoId) {
+        var ordens = this.osUseCase.getOrdensDeServicoPorVeiculoId(veiculoId);
+        List<OrdemDeServicoResponse> dtoList = ordens != null && !ordens.isEmpty() ? ordens.stream().map(osMapper::toResponse).toList() : Collections.emptyList();
+        return !dtoList.isEmpty() ? ResponseEntity.ok(dtoList) : ResponseEntity.notFound().build();
+    }
+
+    @PostMapping
+    @Operation(summary = "Criar ordem de serviço", description = "Cadastra uma nova ordem de serviço vinculada a um cliente e veículo e publica o evento OS_CRIADA (via outbox, na mesma transação) para iniciar a saga")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Ordem de serviço criada com sucesso",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos para criação", content = @Content)
+    })
+    public ResponseEntity<OrdemDeServicoResponse> createOrdemDeServico(@RequestBody @Valid CreateOrdemDeServicoRequest request) {
+        var os = this.osUseCase.createOrdemDeServico(request.getSolicitacao(), request.getIdCliente(), request.getIdVeiculo());
+        return ResponseEntity.created(URI.create(CONTROLLER_PATH + os.getId().toString())).body(osMapper.toResponse(os));
+    }
+
+    @PutMapping("{id}")
+    @Operation(summary = "Atualizar ordem de serviço", description = "Atualiza os dados de uma ordem de serviço existente")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ordem de serviço atualizada com sucesso",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Ordem de serviço não encontrada", content = @Content),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos para atualização", content = @Content)
+    })
+    public ResponseEntity<OrdemDeServicoResponse> updateOrdemDeServico(@PathVariable Long id, @RequestBody UpdateOrdemDeServicoRequest request) {
+        var os = this.osUseCase.updateOrdemDeServico(id, request.getSolicitacao());
+        return os != null ? ResponseEntity.ok(osMapper.toResponse(os)) : ResponseEntity.notFound().build();
+    }
+
+    @DeleteMapping("{id}")
+    @Operation(summary = "Remover ordem de serviço", description = "Remove uma ordem de serviço pelo identificador")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ordem de serviço removida com sucesso",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Ordem de serviço não encontrada", content = @Content)
+    })
+    public ResponseEntity<OrdemDeServicoResponse> deleteOrdemDeServico(@PathVariable Long id) {
+        var os = this.osUseCase.deleteOrdemDeServico(id);
+        return os != null ? ResponseEntity.ok(osMapper.toResponse(os)) : ResponseEntity.notFound().build();
+    }
+
+    // ###########################################################################################
+    // # Comandos da saga
+    // ###########################################################################################
+    @PostMapping("{id}/aprovacao")
+    @Operation(summary = "Aprovar ou rejeitar o orçamento",
+            description = "Registra a decisão do cliente sobre o orçamento. Aprovado: a OS vai para AGUARDANDO_PAGAMENTO e o evento ORCAMENTO_APROVADO é publicado. Rejeitado: a OS é CANCELADA e o evento ORCAMENTO_REJEITADO é publicado. Exige o header X-Webhook-Secret.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Decisão registrada com sucesso",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Transição de status inválida para o estado atual", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Segredo do webhook ausente ou inválido", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Ordem de serviço não encontrada", content = @Content)
+    })
+    public ResponseEntity<OrdemDeServicoResponse> aprovacaoDoOrcamento(@PathVariable Long id,
+                                                                       @RequestBody @Valid AprovacaoOrcamentoRequest request,
+                                                                       @RequestHeader(value = "X-Webhook-Secret", required = false) String secret) {
+        validarSegredoDoWebhook(secret);
+        var os = request.getAprovado()
+                ? this.osUseCase.aprovarOrcamento(id)
+                : this.osUseCase.rejeitarOrcamento(id, request.getMotivo());
+        return ResponseEntity.ok(osMapper.toResponse(os));
+    }
+
+    @PostMapping("{id}/cancelar")
+    @Operation(summary = "Cancelar ordem de serviço",
+            description = "Cancela a OS (permitido em RECEBIDA, EM_DIAGNOSTICO, AGUARDANDO_APROVACAO e AGUARDANDO_PAGAMENTO) e publica o evento OS_CANCELADA. Restrito a ATENDENTE e GERENTE.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ordem de serviço cancelada",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrdemDeServicoResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Cancelamento não permitido no status atual", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Ordem de serviço não encontrada", content = @Content)
+    })
+    public ResponseEntity<OrdemDeServicoResponse> cancelarOrdemDeServico(@PathVariable Long id,
+                                                                         @RequestBody @Valid CancelamentoOrdemDeServicoRequest request) {
+        var os = this.osUseCase.cancelarOrdemDeServico(id, request.getMotivo());
+        return ResponseEntity.ok(osMapper.toResponse(os));
+    }
+
+    private void validarSegredoDoWebhook(String secret) {
+        if (secret == null || !secret.equals(webhookSecret)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Segredo do webhook inválido.");
+        }
+    }
+
+    @PostMapping("transicao/paraEntregue/{id}")
+    @Operation(summary = "Webhook para registrar entrega", description = "Endpoint chamado por sistema externo para notificar que a OS deve ser marcada como Entregue")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Transição realizada com sucesso",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = TransicaoDeStatusDTO.class))),
+            @ApiResponse(responseCode = "400", description = "Transição de status inválida para o estado atual", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Segredo do webhook ausente ou inválido", content = @Content)
+    })
+    public ResponseEntity<TransicaoDeStatusDTO> webhookParaEntregue(@PathVariable Long id,
+                                                                    @RequestHeader(value = "X-Webhook-Secret", required = false) String secret) {
+        validarSegredoDoWebhook(secret);
+        var resultado = this.osUseCase.entregar(id);
+        return resultado.isSucesso() ? ResponseEntity.ok(resultado) : ResponseEntity.badRequest().body(resultado);
+    }
+
+    // Vailidações do JWT
+
+
+    // Garente que o Cliente só acesse o ID dele
+    private void filtrarAcessoDoCliente(Usuario usuario, Long clienteId) {
+        if (usuario != null && usuario.getRole() == Role.CLIENTE) {
+            if (usuario.getCliente() == null || !usuario.getCliente().getId().equals(clienteId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Acesso negado: você só pode consultar suas próprias informações.");
+            }
+        }
+    }
+
+    // Garente que o Cliente só aprove o ID dele
+    private void filtraPropriedadeDaOs(Usuario usuario, Long osId) {
+        if (usuario != null && usuario.getRole() == Role.CLIENTE) {
+            var os = this.osUseCase.getOrdemDeServico(osId);
+            if (os.isEmpty()
+                    || usuario.getCliente() == null
+                    || os.get().getCliente() == null
+                    || !usuario.getCliente().getId().equals(os.get().getCliente().getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Acesso negado: você só pode aprovar suas próprias Ordens de Serviço.");
+            }
+        }
+    }
+
+}
