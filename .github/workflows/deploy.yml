@@ -44,6 +44,7 @@ jobs:
     name: Terraform (Infraestrutura AWS)
     needs: testes
     runs-on: ubuntu-latest
+    environment: prod
     env:
       TF_IN_AUTOMATION: "true"
     defaults:
@@ -82,6 +83,7 @@ jobs:
     name: Build, Push ECR & Deploy EKS
     needs: infra
     runs-on: ubuntu-latest
+    environment: prod
     steps:
       - name: Checkout do Código
         uses: actions/checkout@v4
