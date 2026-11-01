@@ -246,11 +246,20 @@ docker compose --profile tools up -d sonarqube
 | Workflow | Disparo | O que faz |
 |---|---|---|
 | `.github/workflows/pr.yml` | Pull Request para `main` | `Testes e Cobertura (JaCoCo)`, `SonarQube Quality Gate` (falha o PR se o quality gate falhar) e `Validar Build da Imagem Docker` |
-| `.github/workflows/deploy.yml` | Push na `main` ou manual | Roda os testes, publica a imagem `os-service` no ECR e aplica `k8s/` no EKS |
+| `.github/workflows/deploy.yml` | Push na `main` ou manual | Três jobs em sequência: `testes` (check + cobertura), `infra` (Terraform: fmt, validate, plan e apply de `infra/terraform`) e `deploy` (publica a imagem no ECR e aplica `k8s/` no EKS, namespace incluso) |
 
 - **Proteção da `main`:** [`docs/PROTECAO-BRANCH.md`](docs/PROTECAO-BRANCH.md).
-- **Kubernetes** (`k8s/`): Deployment, Service (NLB), HPA, PDB, ConfigMap `os-service-config`, Secret `os-service-secrets` (criado pelo `deploy.yml`) e `serviceaccount.yaml` com a annotation de IRSA. No AWS Academy (LabRole, sem IRSA), as credenciais vêm da role do nó.
-- **Mensageria na AWS:** `infra/aws/criar-recursos-mensageria.sh` (idempotente) cria tópicos, filas, DLQs, assinaturas e a policy das filas. `infra/aws/politica-iam-os-service.json` traz as permissões mínimas do serviço.
+- **Kubernetes** (`k8s/`): Deployment, Service (NLB), HPA, PDB, ConfigMap `os-service-config`, Namespace `os-service`, Secret `os-service-secrets` (criado pelo `deploy.yml`) e `serviceaccount.yaml` com a annotation de IRSA. No AWS Academy (LabRole, sem IRSA), as credenciais vêm da role do nó.
+- **Infraestrutura AWS (Terraform):** `infra/terraform/` provisiona o tópico `os-events`, as filas `os-service-billing-events` e `os-service-execution-events` com DLQs, a role IRSA `os-service-irsa` (com as permissões mínimas de SNS/SQS) e o repositório ECR. O cluster EKS e o RDS **não** são criados aqui: o cluster já existe e o RDS é provisionado por outro repositório (a conexão chega pelos secrets `DB_URL`, `DB_USER` e `DB_PASSWORD`).
+  - **Integração com billing e execution desabilitada por enquanto:** as assinaturas SNS→SQS e as queue policies estão comentadas em `mensageria.tf`, porque os tópicos `billing-events` e `execution-events` (criados pelo billing e pelo execution) ainda não existem na conta. Sem elas, as filas não recebem eventos e a saga não avança. Quando os tópicos existirem, descomente o bloco indicado e rode `terraform apply`.
+  Em produção o `apply` roda no `deploy.yml`; os comandos abaixo servem para rodar manualmente.
+  ```bash
+  cd infra/terraform
+  terraform init   # estado em s3://archtechs-infra-fase4/infra-os-service
+  terraform apply
+  ```
+  Pré-requisito: o provider OIDC do cluster precisa estar associado (`eksctl utils associate-iam-oidc-provider --cluster tech-challenge --approve`). Se mudar `namespace` ou `service_account`, mude também `k8s/`.
+- **Namespace dedicado:** `k8s/namespace.yaml` cria o namespace `os-service` (Pod Security `baseline`, com `restricted` em warn/audit). O `deploy.yml` o aplica antes dos demais manifestos. O secret `newrelic-key-secret` precisa existir nesse namespace.
 - **Secrets do repositório:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `DB_URL`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `WEBHOOK_APROVACAO_SECRET`, `SONAR_TOKEN` e `SONAR_HOST_URL`.
 - **Imagem:** `docker build --platform linux/amd64 -t os-service:local -f app/Dockerfile .` (os nós do EKS são x86_64).
 

@@ -17,12 +17,12 @@ env:
   AWS_REGION: us-east-1
   JAVA_VERSION: "21"
   CLUSTER_NAME: tech-challenge
-  NAMESPACE: tech-challenge
+  NAMESPACE: os-service
   ECR_REPOSITORY: os-service
 
 jobs:
-  deploy:
-    name: Build, Push ECR & Deploy EKS
+  testes:
+    name: Testes e Cobertura
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do Código
@@ -37,6 +37,54 @@ jobs:
 
       - name: Executar Testes e Verificar Cobertura
         run: ./gradlew :app:check --no-daemon
+
+  # Infraestrutura AWS (SNS, SQS, IAM/IRSA, ECR) via Terraform. Roda antes do deploy porque o
+  # repositório ECR e a role IRSA precisam existir para a imagem ser publicada e os pods subirem.
+  infra:
+    name: Terraform (Infraestrutura AWS)
+    needs: testes
+    runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: "true"
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - name: Checkout do Código
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configurar Credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Terraform Format e Validate
+        run: |
+          terraform fmt -check -recursive
+          terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform Apply
+        run: terraform apply -input=false -auto-approve tfplan
+
+  deploy:
+    name: Build, Push ECR & Deploy EKS
+    needs: infra
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Código
+        uses: actions/checkout@v4
 
       - name: Configurar Credenciais AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -77,6 +125,9 @@ jobs:
         run: |
           ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
           sed -i "s|AWS_ACCOUNT_ID_PLACEHOLDER|${ACCOUNT_ID}|g" k8s/configmap.yaml k8s/serviceaccount.yaml
+
+      - name: Criar Namespace Dedicado
+        run: kubectl apply -f k8s/namespace.yaml
 
       - name: Aplicar ConfigMap e ServiceAccount
         run: |
