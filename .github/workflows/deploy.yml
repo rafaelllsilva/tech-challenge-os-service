@@ -38,8 +38,8 @@ jobs:
       - name: Executar Testes e Verificar Cobertura
         run: ./gradlew :app:check --no-daemon
 
-  # Infraestrutura AWS (SNS, SQS, IAM/IRSA, ECR) via Terraform. Roda antes do deploy porque o
-  # repositório ECR e a role IRSA precisam existir para a imagem ser publicada e os pods subirem.
+  # Infraestrutura AWS (SNS, SQS, ECR) via Terraform. Roda antes do deploy porque o repositório ECR
+  # e as filas precisam existir para a imagem ser publicada e os pods subirem.
   infra:
     name: Terraform (Infraestrutura AWS)
     needs: testes
@@ -126,7 +126,7 @@ jobs:
       - name: Resolver Conta AWS nos Manifestos
         run: |
           ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-          sed -i "s|AWS_ACCOUNT_ID_PLACEHOLDER|${ACCOUNT_ID}|g" k8s/configmap.yaml k8s/serviceaccount.yaml
+          sed -i "s|AWS_ACCOUNT_ID_PLACEHOLDER|${ACCOUNT_ID}|g" k8s/configmap.yaml
 
       - name: Criar Namespace Dedicado
         run: kubectl apply -f k8s/namespace.yaml

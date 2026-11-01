@@ -19,8 +19,7 @@ spec:
       labels:
         app: os-service
     spec:
-      # IRSA (EKS): a role vem da annotation do ServiceAccount. No AWS Academy (LabRole, sem IRSA),
-      # as credenciais vêm da role do nó e a annotation é ignorada. Veja serviceaccount.yaml.
+      # AWS Academy (LabRole, sem IRSA): as credenciais vêm da role do nó. Veja serviceaccount.yaml.
       serviceAccountName: os-service
       securityContext:
         runAsUser: 1000
