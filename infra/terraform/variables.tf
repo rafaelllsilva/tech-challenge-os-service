@@ -4,12 +4,6 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-variable "max_receive_count" {
-  description = "Quantas vezes uma mensagem é entregue antes de ir para a DLQ."
-  type        = number
-  default     = 5
-}
-
 variable "repositorio_ecr" {
   description = "Nome do repositório ECR da imagem (usado pelo deploy.yml)."
   type        = string
