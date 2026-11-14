@@ -30,6 +30,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class DespachanteDeEventosTest {
@@ -46,13 +48,15 @@ class DespachanteDeEventosTest {
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final MetricasDaSaga metricas = new MetricasDaSaga(registry, mock(OutboxEventoRepository.class));
 
+    private final LogDeMensagens logMensagens = mock(LogDeMensagens.class);
+
     private DespachanteDeEventos despachante;
 
     @BeforeEach
     void setUp() {
         when(manipulador.tipo()).thenReturn(TipoEvento.PAGAMENTO_ESTORNADO);
         despachante = new DespachanteDeEventos(serializer, repository, TransactionOperations.withoutTransaction(),
-                CLOCK, metricas, mock(OrdemDeServicoEventLogger.class), List.of(manipulador));
+                CLOCK, metricas, mock(OrdemDeServicoEventLogger.class), logMensagens, List.of(manipulador));
     }
 
     private EventEnvelope<PagamentoEstornadoPayload> estorno() {
@@ -74,6 +78,8 @@ class DespachanteDeEventosTest {
         assertThat(captor.getValue().getCorrelationId()).isEqualTo("42");
         assertThat(captor.getValue().getProcessadoEm()).isEqualTo(AGORA);
         assertThat(captor.getValue().getPayload()).contains("pag-1");
+        verify(logMensagens).consumida("42", evento.eventId().toString(), "PAGAMENTO_ESTORNADO", "confirmado",
+                "Estorno de pagamento registrado no histórico da OS");
     }
 
     @Test
@@ -84,6 +90,8 @@ class DespachanteDeEventosTest {
         var resultado = despachante.despachar(serializer.serializar(evento));
 
         assertThat(resultado).isEqualTo(ResultadoDoProcessamento.DUPLICADO);
+        verify(logMensagens).consumida(eq("42"), eq(evento.eventId().toString()), eq("PAGAMENTO_ESTORNADO"),
+                eq("duplicado"), anyString());
         verify(manipulador, never()).tratar(any());
         verify(repository, never()).save(any());
     }
@@ -95,6 +103,8 @@ class DespachanteDeEventosTest {
         var resultado = despachante.despachar(serializer.serializar(evento));
 
         assertThat(resultado).isEqualTo(ResultadoDoProcessamento.SEM_HANDLER);
+        verify(logMensagens).consumida(eq("42"), eq(evento.eventId().toString()), eq("EXECUCAO_FALHOU"),
+                eq("ignorado"), anyString());
         verify(repository, never()).save(any());
     }
 
@@ -106,6 +116,7 @@ class DespachanteDeEventosTest {
 
         assertThat(despachante.despachar(json)).isEqualTo(ResultadoDoProcessamento.TIPO_DESCONHECIDO);
         verify(manipulador, never()).tratar(any());
+        verify(logMensagens).consumida(eq(null), eq(null), eq(null), eq("descartado"), anyString());
     }
 
     @Test
@@ -117,6 +128,8 @@ class DespachanteDeEventosTest {
 
         assertThat(resultado).isEqualTo(ResultadoDoProcessamento.ERRO_NEGOCIO);
         verify(repository, never()).save(any());
+        verify(logMensagens).consumida("42", evento.eventId().toString(), "PAGAMENTO_ESTORNADO", "rejeitado",
+                "transição inválida");
     }
 
     @Test
@@ -127,6 +140,8 @@ class DespachanteDeEventosTest {
         assertThatThrownBy(() -> despachante.despachar(serializer.serializar(evento)))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(repository, never()).save(any());
+        verify(logMensagens).consumida("42", evento.eventId().toString(), "PAGAMENTO_ESTORNADO", "erro_tecnico",
+                "banco fora do ar");
     }
 
     @Test
@@ -156,7 +171,7 @@ class DespachanteDeEventosTest {
     void doisManipuladoresParaOMesmoTipoFalhamNaInicializacao() {
         assertThatThrownBy(() -> new DespachanteDeEventos(serializer, repository,
                 TransactionOperations.withoutTransaction(), CLOCK, metricas,
-                mock(OrdemDeServicoEventLogger.class), List.of(manipulador, manipulador)))
+                mock(OrdemDeServicoEventLogger.class), logMensagens, List.of(manipulador, manipulador)))
                 .isInstanceOf(IllegalStateException.class);
     }
 

@@ -38,18 +38,20 @@ public class DespachanteDeEventos {
     private final Clock clock;
     private final MetricasDaSaga metricas;
     private final OrdemDeServicoEventLogger loggerEventos;
+    private final LogDeMensagens logMensagens;
     private final Map<TipoEvento, ManipuladorDeEvento<?>> manipuladores = new EnumMap<>(TipoEvento.class);
 
     public DespachanteDeEventos(EventoSerializer serializer, EventoProcessadoRepository processadoRepository,
                                 TransactionOperations transacao, Clock clock,
                                 MetricasDaSaga metricas, OrdemDeServicoEventLogger loggerEventos,
-                                List<ManipuladorDeEvento<?>> manipuladores) {
+                                LogDeMensagens logMensagens, List<ManipuladorDeEvento<?>> manipuladores) {
         this.serializer = serializer;
         this.processadoRepository = processadoRepository;
         this.transacao = transacao;
         this.clock = clock;
         this.metricas = metricas;
         this.loggerEventos = loggerEventos;
+        this.logMensagens = logMensagens;
         for (ManipuladorDeEvento<?> manipulador : manipuladores) {
             if (this.manipuladores.putIfAbsent(manipulador.tipo(), manipulador) != null) {
                 throw new IllegalStateException("Mais de um manipulador para o evento " + manipulador.tipo());
@@ -64,6 +66,7 @@ public class DespachanteDeEventos {
         } catch (EventoDesconhecidoException e) {
             log.warn("Evento descartado: {}", e.getMessage());
             metricas.eventoConsumido("DESCONHECIDO", MetricasDaSaga.RESULTADO_IGNORADO);
+            logMensagens.consumida(null, null, null, "descartado", e.getMessage());
             return ResultadoDoProcessamento.TIPO_DESCONHECIDO;
         }
 
@@ -73,19 +76,36 @@ public class DespachanteDeEventos {
         try {
             ResultadoDoProcessamento resultado = transacao.execute(status -> processar(evento));
             registrarConsumo(evento, resultado);
+            logarResultado(evento, resultado);
             return resultado;
         } catch (BadRequestException | ConflictException | NotFoundException | IllegalStateException e) {
             log.warn("Evento {} rejeitado por regra de negócio: {}", evento.type(), e.getMessage());
             registrarConsumo(evento, ResultadoDoProcessamento.ERRO_NEGOCIO);
+            logarConsumo(evento, "rejeitado", e.getMessage());
             return ResultadoDoProcessamento.ERRO_NEGOCIO;
         } catch (RuntimeException e) {
             registrarConsumo(evento, MetricasDaSaga.RESULTADO_ERRO_TECNICO);
+            logarConsumo(evento, "erro_tecnico", e.getMessage());
             throw e;
         } finally {
             MDC.remove("correlationId");
             MDC.remove("eventId");
             MDC.remove("eventType");
         }
+    }
+
+    // ERRO_NEGOCIO e TIPO_DESCONHECIDO já são logados no catch e na desserialização.
+    private void logarResultado(EventEnvelope<?> evento, ResultadoDoProcessamento resultado) {
+        switch (resultado) {
+            case SUCESSO -> logarConsumo(evento, "confirmado", LogDeMensagens.descricaoDoConsumo(evento.type().name()));
+            case DUPLICADO -> logarConsumo(evento, "duplicado", "Evento já processado anteriormente, ignorado");
+            case SEM_HANDLER -> logarConsumo(evento, "ignorado", "Nenhum manipulador para o evento, confirmado sem processar");
+            case ERRO_NEGOCIO, TIPO_DESCONHECIDO -> { }
+        }
+    }
+
+    private void logarConsumo(EventEnvelope<?> evento, String outcome, String message) {
+        logMensagens.consumida(evento.correlationId(), evento.eventId().toString(), evento.type().name(), outcome, message);
     }
 
     private void registrarConsumo(EventEnvelope<?> evento, ResultadoDoProcessamento resultado) {
