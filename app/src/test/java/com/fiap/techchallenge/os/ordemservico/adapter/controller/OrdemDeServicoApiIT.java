@@ -315,7 +315,7 @@ public class OrdemDeServicoApiIT {
     }
 
     @Test
-    public void given_osAguardandoAprovacao_when_aprovacaoRejeitada_then_canceladaEPublicaEvento() throws Exception {
+    public void given_osAguardandoAprovacao_when_aprovacaoRejeitada_then_canceladaEPublicaOrcamentoRejeitadoEOsCancelada() throws Exception {
         Long osId = criarOsAguardandoAprovacao("OS para rejeitar");
 
         mockMvc.perform(post(CONTROLLER_PATH + osId + "/aprovacao")
@@ -327,6 +327,8 @@ public class OrdemDeServicoApiIT {
 
         var evento = eventosDaOs(osId).stream().filter(e -> e.getTipo().equals("ORCAMENTO_REJEITADO")).findFirst().orElseThrow();
         assertThat(evento.getPayload()).contains("muito caro");
+        var cancelada = eventosDaOs(osId).stream().filter(e -> e.getTipo().equals("OS_CANCELADA")).findFirst().orElseThrow();
+        assertThat(cancelada.getPayload()).contains("muito caro").contains("AGUARDANDO_APROVACAO");
     }
 
     @Test

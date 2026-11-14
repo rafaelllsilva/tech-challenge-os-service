@@ -65,7 +65,8 @@ security/ config/ exception/
 | Publicar no broker e gravar no banco não são atômicos | **Outbox transacional:** o evento é gravado na mesma transação da OS e um relay o envia ao SNS |
 | O SQS entrega "pelo menos uma vez" (duplicatas) | **Consumidores idempotentes:** `evento_processado` deduplica por `eventId` na mesma transação do handler |
 | Mensagens que falham sempre | Reentrega pelo SQS e **DLQ** após 5 tentativas |
-| Eventos fora de ordem ou inválidos para o estado atual | Máquina de estados rejeita a transição; o erro de negócio é confirmado e contado em `os.eventos.consumidos{resultado="erro_negocio"}` |
+| Eventos fora de ordem (chegam antes do pré-requisito) | `EventoPrematuroException`: a mensagem não é confirmada nem gravada em `evento_processado`, e o SQS a reentrega (métrica `resultado="adiado"`). Passadas as tentativas, vai à DLQ. A janela depende do visibility timeout e do `maxReceiveCount` das filas |
+| Eventos inválidos para o estado atual (status posterior ou `CANCELADA`) | Máquina de estados rejeita a transição; o erro de negócio é confirmado e contado em `os.eventos.consumidos{resultado="erro_negocio"}` |
 
 ### Saga (sequência)
 

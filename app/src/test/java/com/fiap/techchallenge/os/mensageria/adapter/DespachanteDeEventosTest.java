@@ -5,6 +5,7 @@ import com.fiap.techchallenge.os.mensageria.framework.persistence.OutboxEventoRe
 import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.fiap.techchallenge.os.exception.BadRequestException;
+import com.fiap.techchallenge.os.exception.EventoPrematuroException;
 import com.fiap.techchallenge.os.mensageria.contrato.EventEnvelope;
 import com.fiap.techchallenge.os.mensageria.contrato.EventoSerializer;
 import com.fiap.techchallenge.os.mensageria.contrato.TipoEvento;
@@ -117,6 +118,19 @@ class DespachanteDeEventosTest {
         assertThat(despachante.despachar(json)).isEqualTo(ResultadoDoProcessamento.TIPO_DESCONHECIDO);
         verify(manipulador, never()).tratar(any());
         verify(logMensagens).consumida(eq(null), eq(null), eq(null), eq("descartado"), anyString());
+    }
+
+    @Test
+    void eventoPrematuroEhRelancadoParaReentregaENaoRegistraComoProcessado() {
+        var evento = estorno();
+        doThrow(new EventoPrematuroException("pré-requisito pendente")).when(manipulador).tratar(evento);
+        var json = serializer.serializar(evento);
+
+        assertThatThrownBy(() -> despachante.despachar(json)).isInstanceOf(EventoPrematuroException.class);
+
+        verify(repository, never()).save(any());
+        verify(logMensagens).consumida("42", evento.eventId().toString(), "PAGAMENTO_ESTORNADO", "adiado",
+                "pré-requisito pendente");
     }
 
     @Test

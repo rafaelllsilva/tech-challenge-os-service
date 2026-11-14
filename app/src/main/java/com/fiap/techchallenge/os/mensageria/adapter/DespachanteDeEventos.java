@@ -2,6 +2,7 @@ package com.fiap.techchallenge.os.mensageria.adapter;
 
 import com.fiap.techchallenge.os.exception.BadRequestException;
 import com.fiap.techchallenge.os.exception.ConflictException;
+import com.fiap.techchallenge.os.exception.EventoPrematuroException;
 import com.fiap.techchallenge.os.exception.NotFoundException;
 import com.fiap.techchallenge.os.mensageria.contrato.EventEnvelope;
 import com.fiap.techchallenge.os.mensageria.contrato.EventoDesconhecidoException;
@@ -26,7 +27,8 @@ import java.util.Map;
  * Desserializa, deduplica por eventId e despacha para o {@link ManipuladorDeEvento} do tipo.
  * A verificação, o handler e o registro em evento_processado rodam numa única transação.
  * Erros de negócio e eventos sem tratamento são confirmados (retornam resultado); erros técnicos
- * são relançados, e a mensagem volta para a fila ou vai para a DLQ.
+ * e eventos que chegaram antes do pré-requisito são relançados, e a mensagem volta para a fila
+ * ou vai para a DLQ.
  */
 @Slf4j
 @Component
@@ -78,6 +80,11 @@ public class DespachanteDeEventos {
             registrarConsumo(evento, resultado);
             logarResultado(evento, resultado);
             return resultado;
+        } catch (EventoPrematuroException e) {
+            log.warn("Evento {} adiado, aguardando pré-requisito: {}", evento.type(), e.getMessage());
+            registrarConsumo(evento, MetricasDaSaga.RESULTADO_ADIADO);
+            logarConsumo(evento, "adiado", e.getMessage());
+            throw e;
         } catch (BadRequestException | ConflictException | NotFoundException | IllegalStateException e) {
             log.warn("Evento {} rejeitado por regra de negócio: {}", evento.type(), e.getMessage());
             registrarConsumo(evento, ResultadoDoProcessamento.ERRO_NEGOCIO);
