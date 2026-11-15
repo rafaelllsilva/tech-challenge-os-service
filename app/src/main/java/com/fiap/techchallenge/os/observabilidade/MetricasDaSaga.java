@@ -21,6 +21,7 @@ public class MetricasDaSaga {
     public static final String RESULTADO_ERRO_NEGOCIO = "erro_negocio";
     public static final String RESULTADO_ERRO_TECNICO = "erro_tecnico";
     public static final String RESULTADO_IGNORADO = "ignorado";
+    public static final String RESULTADO_ADIADO = "adiado";
 
     private final MeterRegistry registry;
 

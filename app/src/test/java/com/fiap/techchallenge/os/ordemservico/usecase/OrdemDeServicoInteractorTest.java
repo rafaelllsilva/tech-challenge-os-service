@@ -11,6 +11,7 @@ import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.domain.StatusOrdemDeServico;
 import com.fiap.techchallenge.os.ordemservico.observabilidade.OrdemDeServicoEventLogger;
 import com.fiap.techchallenge.os.exception.BadRequestException;
+import com.fiap.techchallenge.os.exception.EventoPrematuroException;
 import com.fiap.techchallenge.os.exception.NotFoundException;
 import com.fiap.techchallenge.os.mensageria.contrato.payload.OrcamentoAprovadoPayload;
 import com.fiap.techchallenge.os.mensageria.contrato.payload.OrcamentoRejeitadoPayload;
@@ -387,7 +388,7 @@ public class OrdemDeServicoInteractorTest {
     }
 
     @Test
-    public void given_aguardandoAprovacao_when_rejeitarOrcamento_then_canceladaEPublicaOrcamentoRejeitado() {
+    public void given_aguardandoAprovacao_when_rejeitarOrcamento_then_canceladaEPublicaOrcamentoRejeitadoEOsCancelada() {
         var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_APROVACAO);
         os.setOrcamentoId("orc-1");
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
@@ -397,9 +398,26 @@ public class OrdemDeServicoInteractorTest {
         assertEquals(StatusOrdemDeServico.CANCELADA, resultado.getStatus());
         verify(historicoStatusOrdemDeServicoGateway).registrarStatus(1L, StatusOrdemDeServico.CANCELADA, AGORA);
         ArgumentCaptor<EventEnvelope<?>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
-        verify(publicadorDeEventos).publicar(captor.capture());
-        assertEquals(TipoEvento.ORCAMENTO_REJEITADO, captor.getValue().type());
-        assertEquals(new OrcamentoRejeitadoPayload("1", "orc-1", "muito caro"), captor.getValue().payload());
+        verify(publicadorDeEventos, times(2)).publicar(captor.capture());
+        var eventos = captor.getAllValues();
+        assertEquals(TipoEvento.ORCAMENTO_REJEITADO, eventos.get(0).type());
+        assertEquals(new OrcamentoRejeitadoPayload("1", "orc-1", "muito caro"), eventos.get(0).payload());
+        assertEquals(TipoEvento.OS_CANCELADA, eventos.get(1).type());
+        assertEquals(new OsCanceladaPayload("1", "muito caro", "AGUARDANDO_APROVACAO"), eventos.get(1).payload());
+    }
+
+    @Test
+    public void given_rejeicaoSemMotivo_when_rejeitarOrcamento_then_osCanceladaUsaMotivoPadrao() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_PAGAMENTO);
+        os.setOrcamentoId("orc-1");
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        osUseCase.rejeitarOrcamento(1L, null);
+
+        ArgumentCaptor<EventEnvelope<?>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
+        verify(publicadorDeEventos, times(2)).publicar(captor.capture());
+        assertEquals(new OsCanceladaPayload("1", "ORCAMENTO_REJEITADO", "AGUARDANDO_PAGAMENTO"),
+                captor.getAllValues().get(1).payload());
     }
 
     @Test
@@ -636,8 +654,17 @@ public class OrdemDeServicoInteractorTest {
     }
 
     @Test
-    public void given_osRecebida_when_execucaoIniciada_then_jogaBadRequest() {
-        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.RECEBIDA);
+    public void given_osAguardandoPagamento_when_execucaoIniciada_then_jogaEventoPrematuro() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_PAGAMENTO);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        assertThrows(EventoPrematuroException.class, () -> osUseCase.aplicarExecucaoIniciada(1L));
+        verify(osGateway, never()).updateOrdemDeServico(any());
+    }
+
+    @Test
+    public void given_osCancelada_when_execucaoIniciada_then_jogaBadRequest() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.CANCELADA);
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
 
         assertThrows(BadRequestException.class, () -> osUseCase.aplicarExecucaoIniciada(1L));
@@ -656,11 +683,11 @@ public class OrdemDeServicoInteractorTest {
     }
 
     @Test
-    public void given_osAprovada_when_execucaoFinalizada_then_jogaBadRequest() {
+    public void given_osAprovada_when_execucaoFinalizada_then_jogaEventoPrematuro() {
         var os = criarOrdemDeServico(1L, StatusOrdemDeServico.APROVADA);
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
 
-        assertThrows(BadRequestException.class, () -> osUseCase.aplicarExecucaoFinalizada(1L));
+        assertThrows(EventoPrematuroException.class, () -> osUseCase.aplicarExecucaoFinalizada(1L));
     }
 
     @Test
@@ -677,11 +704,28 @@ public class OrdemDeServicoInteractorTest {
     }
 
     @Test
-    public void given_osAguardandoPagamento_when_execucaoFalhou_then_jogaBadRequest() {
+    public void given_osAguardandoPagamento_when_execucaoFalhou_then_jogaEventoPrematuro() {
         var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_PAGAMENTO);
         when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
 
+        assertThrows(EventoPrematuroException.class, () -> osUseCase.aplicarExecucaoFalhou(1L));
+        verify(osGateway, never()).updateOrdemDeServico(any());
+    }
+
+    @Test
+    public void given_osFinalizada_when_execucaoFalhou_then_jogaBadRequest() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.FINALIZADA);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
         assertThrows(BadRequestException.class, () -> osUseCase.aplicarExecucaoFalhou(1L));
+    }
+
+    @Test
+    public void given_osAguardandoAprovacao_when_pagamentoConfirmado_then_jogaEventoPrematuro() {
+        var os = criarOrdemDeServico(1L, StatusOrdemDeServico.AGUARDANDO_APROVACAO);
+        when(osGateway.findOrdemDeServicoById(1L)).thenReturn(Optional.of(os));
+
+        assertThrows(EventoPrematuroException.class, () -> osUseCase.aplicarPagamentoConfirmado(1L));
     }
 
     @Test

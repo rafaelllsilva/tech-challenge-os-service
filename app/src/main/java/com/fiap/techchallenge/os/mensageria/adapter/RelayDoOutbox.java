@@ -38,10 +38,12 @@ public class RelayDoOutbox {
     private final Clock clock;
     private final MetricasDaSaga metricas;
     private final OrdemDeServicoEventLogger loggerEventos;
+    private final LogDeMensagens logMensagens;
 
     public RelayDoOutbox(OutboxEventoRepository repository, SnsTemplate snsTemplate,
                          MensageriaProperties mensageria, OutboxRelayProperties propriedades, Clock clock,
-                         MetricasDaSaga metricas, OrdemDeServicoEventLogger loggerEventos) {
+                         MetricasDaSaga metricas, OrdemDeServicoEventLogger loggerEventos,
+                         LogDeMensagens logMensagens) {
         this.repository = repository;
         this.snsTemplate = snsTemplate;
         this.mensageria = mensageria;
@@ -49,6 +51,7 @@ public class RelayDoOutbox {
         this.clock = clock;
         this.metricas = metricas;
         this.loggerEventos = loggerEventos;
+        this.logMensagens = logMensagens;
     }
 
     @Scheduled(fixedDelayString = "${os.outbox.relay.intervalo-ms:1000}")
@@ -75,6 +78,7 @@ public class RelayDoOutbox {
             evento.setUltimoErro(null);
             metricas.eventoPublicado(evento.getTipo());
             loggerEventos.registrarEventoPublicado(evento.getTipo(), evento.getTopico());
+            logarPublicacao(evento, "publicado", LogDeMensagens.descricaoDaPublicacao(evento.getTipo()));
         } catch (Exception e) {
             registrarFalha(evento, e);
         } finally {
@@ -90,9 +94,15 @@ public class RelayDoOutbox {
         if (evento.getTentativas() >= propriedades.maxTentativas()) {
             evento.setStatus(StatusOutbox.FALHOU);
             log.error("Evento {} marcado como FALHOU após {} tentativas", evento.getTipo(), evento.getTentativas(), e);
+            logarPublicacao(evento, "falhou", e.toString());
         } else {
             log.warn("Falha ao publicar evento {} (tentativa {}): {}", evento.getTipo(), evento.getTentativas(), e.toString());
+            logarPublicacao(evento, "falha", e.toString());
         }
+    }
+
+    private void logarPublicacao(OutboxEventoEntity evento, String outcome, String message) {
+        logMensagens.publicada(evento.getCorrelationId(), evento.getId().toString(), evento.getTipo(), outcome, message);
     }
 
     private String destino(OutboxEventoEntity evento) {

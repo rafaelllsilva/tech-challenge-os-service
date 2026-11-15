@@ -4,6 +4,7 @@ import com.fiap.techchallenge.os.cliente.domain.Cliente;
 import com.fiap.techchallenge.os.cliente.usecase.ClienteGateway;
 import com.fiap.techchallenge.os.ordemservico.adapter.controller.dto.TransicaoDeStatusDTO;
 import com.fiap.techchallenge.os.exception.BadRequestException;
+import com.fiap.techchallenge.os.exception.EventoPrematuroException;
 import com.fiap.techchallenge.os.exception.NotFoundException;
 import com.fiap.techchallenge.os.ordemservico.domain.ItemHistorico;
 import com.fiap.techchallenge.os.ordemservico.domain.OrdemDeServico;
@@ -36,6 +37,7 @@ import java.util.*;
 public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
 
     private static final String MOTIVO_PAGAMENTO_RECUSADO = "PAGAMENTO_RECUSADO";
+    private static final String MOTIVO_ORCAMENTO_REJEITADO = "ORCAMENTO_REJEITADO";
     private static final String OS_NAO_EXISTE_MSG_TEMPLATE = "Erro: Ordem de Serviço '%d' não existe!";
 
     private final OrdemDeServicoGateway osGateway;
@@ -190,10 +192,15 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
     @Transactional
     public OrdemDeServico rejeitarOrcamento(Long id, String motivo) {
         OrdemDeServico os = buscarOuFalhar(id);
+        StatusOrdemDeServico statusAnterior = os.getStatus();
         aplicarTransicao(os, os::rejeitarOrcamento);
         String osId = String.valueOf(os.getId());
         publicadorDeEventos.publicar(EventEnvelope.novo(TipoEvento.ORCAMENTO_REJEITADO, osId,
                 new OrcamentoRejeitadoPayload(osId, os.getOrcamentoId(), motivo), clock));
+        // O execution não consome ORCAMENTO_REJEITADO: precisa de OS_CANCELADA para encerrar o trabalho.
+        publicadorDeEventos.publicar(EventEnvelope.novo(TipoEvento.OS_CANCELADA, osId,
+                new OsCanceladaPayload(osId, motivo != null && !motivo.isBlank() ? motivo : MOTIVO_ORCAMENTO_REJEITADO,
+                        statusAnterior.name()), clock));
         return os;
     }
 
@@ -276,7 +283,10 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
     @Override
     @Transactional
     public void aplicarPagamentoConfirmado(Long id) {
-        buscarParaSaga(id).ifPresent(os -> aplicarTransicao(os, os::confirmarPagamento));
+        buscarParaSaga(id).ifPresent(os -> {
+            adiarSeAntes(os, StatusOrdemDeServico.AGUARDANDO_PAGAMENTO);
+            aplicarTransicao(os, os::confirmarPagamento);
+        });
     }
 
     @Override
@@ -309,13 +319,19 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
     @Override
     @Transactional
     public void aplicarExecucaoIniciada(Long id) {
-        buscarParaSaga(id).ifPresent(os -> aplicarTransicao(os, os::iniciarExecucao));
+        buscarParaSaga(id).ifPresent(os -> {
+            adiarSeAntes(os, StatusOrdemDeServico.APROVADA);
+            aplicarTransicao(os, os::iniciarExecucao);
+        });
     }
 
     @Override
     @Transactional
     public void aplicarExecucaoFinalizada(Long id) {
-        buscarParaSaga(id).ifPresent(os -> aplicarTransicao(os, os::finalizarExecucao));
+        buscarParaSaga(id).ifPresent(os -> {
+            adiarSeAntes(os, StatusOrdemDeServico.EM_EXECUCAO);
+            aplicarTransicao(os, os::finalizarExecucao);
+        });
     }
 
     @Override
@@ -323,6 +339,7 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
     public void aplicarExecucaoFalhou(Long id) {
         // O os-service não publica estorno: o billing reage a EXECUCAO_FALHOU e publica PAGAMENTO_ESTORNADO.
         buscarParaSaga(id).ifPresent(os -> {
+            adiarSeAntes(os, StatusOrdemDeServico.APROVADA);
             aplicarTransicao(os, os::falharExecucao);
             loggerEventos.registrarCompensacao(os.getId(), "EXECUCAO_FALHOU", os.getStatus(), clock.instant());
         });
@@ -333,6 +350,14 @@ public class OrdemDeServicoInteractor implements OrdemDeServicoUseCase {
     public void registrarEventoInformativo(Long id, String tipoEvento) {
         buscarParaSaga(id).ifPresent(os ->
                 log.info("Evento {} registrado para a Ordem de Serviço {} (status atual '{}')", tipoEvento, id, os.getStatus()));
+    }
+
+    // A ordem do enum segue o fluxo da saga: status anterior ao exigido significa que o pré-requisito ainda não chegou.
+    private void adiarSeAntes(OrdemDeServico os, StatusOrdemDeServico exigido) {
+        if (os.getStatus().ordinal() < exigido.ordinal()) {
+            throw new EventoPrematuroException("A Ordem de Serviço %d está em '%s' e o evento exige '%s' ou posterior"
+                    .formatted(os.getId(), os.getStatus(), exigido));
+        }
     }
 
     private Optional<OrdemDeServico> buscarParaSaga(Long id) {
